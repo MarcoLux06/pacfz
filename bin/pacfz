@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+
+SCRIPT_LIST="$HOME/.local/share/pacfz/listPackages.py"
+SCRIPT_PREVIEW="$HOME/.local/share/pacfz/previewItem.py"
+SCRIPT_CREATE_DB="$HOME/.local/share/pacfz/createDB.py"
+SCRIPT_NOTES="$HOME/.local/share/pacfz/noteManager.py"
+
+show_usage() {
+  echo "Usage: pacfz [OPTIONS]"
+  echo ""
+  echo "Filter Options:"
+  echo "  -m, --foreign       Show only foreign packages"
+  echo "  -o, --orphans       Show only orphan packages"
+  echo "  -e, --explicit      Show only explicitly installed packages"
+  echo "  -d, --deps          Show only dependency packages"
+  echo "  -n, --notadep       Not a dependency for anything"
+  echo "  -k, --notoptdep     Not an optional dependency for anything"
+  echo "  --has-note          Only packages that have a user note"
+  echo "  --no-note           Only packages without a user note"
+  echo "  -f, --field F V     Only packages where field F matches value V"
+  echo "                      (repeatable, AND-combined; e.g. -f Name vim)"
+  echo "  -a, --any V         Only packages where any field matches value V"
+  echo "                      (repeatable, AND-combined with everything else)"
+  echo "  -x, --exact-match   Use exact equality (instead of substring) for -f/-a"
+  echo "  -v, --invert [F]    Bare -v inverts the entire result, applied last."
+  echo "                      -v FILTER (repeatable) inverts only that one canned"
+  echo "                      filter, leaving every other active filter untouched"
+  echo "                      (e.g. -e -v notadep -v notoptdep = explicit packages"
+  echo "                      where NOT(notadep AND notoptdep)). FILTER is one of:"
+  echo "                      foreign/orphan/explicit/deps/notadep/notoptdep or"
+  echo "                      their short letters m/o/e/d/n/k"
+  echo ""
+  echo "Sort Options:"
+  echo "  -s, --sort-by [F]   Sort by field F (default field: Name; bare -s means"
+  echo "                      Installed_Size; --size also still works)"
+  echo "  --asc               Sort ascending (applies to whichever field is sorted)"
+  echo "  --desc              Sort descending (applies to whichever field is sorted)"
+  echo ""
+  echo "Display Options:"
+  echo "  --exact             Use exact matching in fzf (-e flag)"
+  echo "  --hide-notes        Hide user notes in the preview pane"
+  echo "  -t, --totalsize     Show total size of all packages"
+  echo ""
+  echo "Notes:"
+  echo "  -D <pkg> <note>     Set a note for a package"
+  echo "  -D <pkg> -d         Delete the note for a package"
+  echo "  --notes-list        List all packages that have notes"
+  echo ""
+  echo "Other:"
+  echo "  -h, --help          Show this help message"
+  echo "  -r, --refresh       Refresh the package database"
+  echo ""
+  echo "Inside the interactive picker:"
+  echo "  ctrl-r              Rebuild the package cache and refresh the visible"
+  echo "                      list, without leaving fzf — the header shows"
+  echo "                      '✓ cache refreshed at HH:MM:SS' when done, so"
+  echo "                      repeated presses are visibly distinct"
+}
+
+show_total() {
+  YELLOW=$'\033[33m'
+  echo "total package Size:$YELLOW"
+  python "$SCRIPT_LIST" "--totalsize"
+}
+
+show_interactive() {
+  # When SHOW_NOTES is false (--hide-notes passed), forward the flag so
+  # previewItem.py skips the notes DB entirely.
+  local notes_flag=""
+  if [[ "$SHOW_NOTES" == "false" ]]; then
+    notes_flag="--hide-notes"
+  fi
+
+  # Build a properly-quoted "python listPackages.py <args>" string for fzf's
+  # reload() action. fzf runs bind actions through a shell, so every argument
+  # — including multi-word -f/-a values — needs the same %q-style escaping
+  # PYTHON_ARGS already gets when forwarded normally; joining the array with
+  # plain spaces here would silently break those values apart again.
+  local list_cmd
+  printf -v list_cmd 'python %q' "$SCRIPT_LIST"
+  local arg quoted
+  for arg in "${PYTHON_ARGS[@]}"; do
+    printf -v quoted '%q' "$arg"
+    list_cmd="$list_cmd $quoted"
+  done
+
+  local create_db_cmd
+  printf -v create_db_cmd 'python %q --quiet' "$SCRIPT_CREATE_DB"
+
+  # Ctrl-R: rebuild the pacman cache, refresh the visible list using the exact
+  # same filters this invocation started with, then stamp the header with the
+  # time it happened — so hitting ctrl-r twice is visibly distinguishable, not
+  # just the same static message both times. transform-header runs a command
+  # and uses its output as the header text; requires a fairly recent fzf
+  # (newer than the change-header action, which itself needs fzf >= 0.42).
+  # The \$(...) here is intentionally escaped so *fzf's* shell evaluates it
+  # when the bind fires, not pacfz's shell while building this string.
+  local refresh_bind="ctrl-r:execute-silent($create_db_cmd)+reload($list_cmd)+transform-header(echo ✓ cache refreshed at \$(date +%H:%M:%S))"
+
+  # 20 lines of preview info + 4 lines of top/bottom border + 2 lines notes
+  local fzf_opts=(
+    --height=26
+    --preview-window=right,70%
+    --preview "printf '%s\n' {} | python $SCRIPT_PREVIEW $notes_flag"
+    --bind "$refresh_bind"
+  )
+
+  if [[ "$EXACT_MATCH" == "true" ]]; then
+    fzf_opts+=(-e)
+  fi
+
+  echo "$package_list" \
+  | fzf "${fzf_opts[@]}" \
+  | python "$SCRIPT_PREVIEW" $notes_flag
+}
+
+create_database() {
+  # don't spam the chat
+  python "$SCRIPT_CREATE_DB" '--quiet'
+}
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+EXACT_MATCH="false"
+SHOW_NOTES="true"
+PYTHON_ARGS=()
+
+# First pass: detect bash-only flags so they can influence show_interactive()
+# regardless of their position in the argument list.
+for arg in "$@"; do
+  case "$arg" in
+    --exact)      EXACT_MATCH="true"  ;;
+    --hide-notes) SHOW_NOTES="false"  ;;
+  esac
+done
+
+# Build the argument array forwarded to Python scripts, stripping bash-only
+# flags. Using an array (rather than a plain string) preserves any argument
+# containing spaces — important now that -f/-a take free-text values like
+# package descriptions.
+for arg in "$@"; do
+  if [[ "$arg" != "--exact" && "$arg" != "--hide-notes" ]]; then
+    PYTHON_ARGS+=("$arg")
+  fi
+done
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+if [[ $# -gt 0 ]]; then
+  case $1 in
+    -m|--foreign|-o|--orphans|-e|--explicit|-d|--deps|-s|--size|--sort-by|-n|--notadep|-k|--notoptdep|--asc|--desc|--has-note|--no-note|-f|--field|-a|--any|-x|--exact-match|-v|--invert)
+      package_list=$(python "$SCRIPT_LIST" "${PYTHON_ARGS[@]}")
+      show_interactive
+      exit 0
+      ;;
+    -h|--help)
+      show_usage
+      exit 0
+      ;;
+    -t|--totalsize)
+      show_total
+      exit 0
+      ;;
+    -r|--refresh)
+      create_database
+      exit 0
+      ;;
+    --exact)
+      # --exact alone (or combined with filter flags via PYTHON_ARGS)
+      package_list=$(python "$SCRIPT_LIST" "${PYTHON_ARGS[@]}")
+      show_interactive
+      exit 0
+      ;;
+    --hide-notes)
+      # --hide-notes alone (or combined with filter flags via PYTHON_ARGS)
+      package_list=$(python "$SCRIPT_LIST" "${PYTHON_ARGS[@]}")
+      show_interactive
+      exit 0
+      ;;
+    -D)
+      # Delegate entirely to noteManager; pass $@ so it sees -D <pkg> [note|-d]
+      python "$SCRIPT_NOTES" "$@"
+      exit 0
+      ;;
+    --notes-list)
+      python "$SCRIPT_NOTES" --list
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      show_usage
+      exit 1
+      ;;
+  esac
+else
+  # No arguments: show all packages
+  package_list=$(python "$SCRIPT_LIST")
+  show_interactive
+  exit 0
+fi

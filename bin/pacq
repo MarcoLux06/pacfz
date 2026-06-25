@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# pacq - non-interactive query into the pacman package database.
+# Forwards all flags straight to listPackages.py except -h/--help,
+# which prints this script's own usage instead of argparse's.
+
+SCRIPT_LIST="$HOME/.local/share/pacfz/listPackages.py"
+
+show_usage() {
+  echo "Usage: pacq [OPTIONS]"
+  echo ""
+  echo "Non-interactive package query (no fzf). All options are forwarded"
+  echo "to listPackages.py."
+  echo ""
+  echo "Filter Options:"
+  echo "  -m, --foreign       Show only foreign packages"
+  echo "  -o, --orphans       Show only orphan packages"
+  echo "  -e, --explicit      Show only explicitly installed packages"
+  echo "  -d, --deps          Show only dependency packages"
+  echo "  -n, --notadep       Not a dependency for anything"
+  echo "  -k, --notoptdep     Not an optional dependency for anything"
+  echo "  --has-note          Only packages that have a user note"
+  echo "  --no-note           Only packages without a user note"
+  echo "  -f, --field F V     Only packages where field F matches value V"
+  echo "                      (repeatable, AND-combined; e.g. -f Name vim)"
+  echo "  -a, --any V         Only packages where any field matches value V"
+  echo "                      (repeatable, AND-combined with everything else)"
+  echo "  -x, --exact-match   Use exact equality (instead of substring) for -f/-a"
+  echo "  -v, --invert [F]    Bare -v inverts the entire result, applied last."
+  echo "                      -v FILTER (repeatable) inverts only that one canned"
+  echo "                      filter, leaving every other active filter untouched"
+  echo "                      (e.g. -e -v notadep -v notoptdep = explicit packages"
+  echo "                      where NOT(notadep AND notoptdep)). FILTER is one of:"
+  echo "                      foreign/orphan/explicit/deps/notadep/notoptdep or"
+  echo "                      their short letters m/o/e/d/n/k"
+  echo ""
+  echo "Sort Options:"
+  echo "  -s, --sort-by [F]   Sort by field F (default field: Name; bare -s means"
+  echo "                      Installed_Size; --size also still works)"
+  echo "  --asc               Sort ascending (applies to whichever field is sorted)"
+  echo "  --desc              Sort descending (applies to whichever field is sorted)"
+  echo ""
+  echo "Other:"
+  echo "  -t, --totalsize     Show total size of all packages"
+  echo "  -h, --help          Show this help message"
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help)
+      show_usage
+      exit 0
+      ;;
+  esac
+done
+
+exec python "$SCRIPT_LIST" "$@"
