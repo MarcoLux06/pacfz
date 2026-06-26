@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 
-SCRIPT_LIST="$HOME/.local/share/pacfz/listPackages.py"
-SCRIPT_PREVIEW="$HOME/.local/share/pacfz/previewItem.py"
-SCRIPT_CREATE_DB="$HOME/.local/share/pacfz/createDB.py"
-SCRIPT_NOTES="$HOME/.local/share/pacfz/noteManager.py"
+# Find the Python modules either next to this script (running straight from a
+# git checkout, no install needed) or under /usr/share/pacfz (where the
+# PKGBUILD puts them once installed via `makepkg -si`).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/list_packages.py" ]]; then
+  PACFZ_LIBDIR="$SCRIPT_DIR"
+else
+  PACFZ_LIBDIR="/usr/share/pacfz"
+fi
+SCRIPT_LIST="$PACFZ_LIBDIR/list_packages.py"
+SCRIPT_PREVIEW="$PACFZ_LIBDIR/preview_item.py"
+SCRIPT_CREATE_DB="$PACFZ_LIBDIR/create_db.py"
+SCRIPT_NOTES="$PACFZ_LIBDIR/note_manager.py"
 
 show_usage() {
   echo "Usage: pacfz [OPTIONS]"
@@ -39,7 +48,7 @@ show_usage() {
   echo "Display Options:"
   echo "  --exact             Use exact matching in fzf (-e flag)"
   echo "  --hide-notes        Hide user notes in the preview pane"
-  echo "  -t, --totalsize     Show total size of all packages"
+  echo "  -t, --totalsize     Show total size of the (filtered) packages"
   echo ""
   echo "Notes:"
   echo "  -D <pkg> <note>     Set a note for a package"
@@ -64,18 +73,20 @@ show_total() {
 }
 
 show_interactive() {
-  # When SHOW_NOTES is false (--hide-notes passed), forward the flag so
-  # previewItem.py skips the notes DB entirely.
+  # When --hide-notes is passed, forward it so previewItem skips the notes DB.
   local notes_flag=""
   if [[ "$SHOW_NOTES" == "false" ]]; then
-    notes_flag="--hide-notes"
+    notes_flag=" --hide-notes"
   fi
 
-  # Build a properly-quoted "python listPackages.py <args>" string for fzf's
-  # reload() action. fzf runs bind actions through a shell, so every argument
-  # — including multi-word -f/-a values — needs the same %q-style escaping
-  # PYTHON_ARGS already gets when forwarded normally; joining the array with
-  # plain spaces here would silently break those values apart again.
+  # The preview command is a single string that fzf runs through a shell, with
+  # {} substituted (and shell-quoted) by fzf. We quote $SCRIPT_PREVIEW with
+  # embedded double quotes so a $HOME containing spaces still works.
+  local preview_cmd="printf '%s\n' {} | python \"$SCRIPT_PREVIEW\"$notes_flag"
+
+  # Build a properly-quoted "python list_packages.py <args>" string for fzf's
+  # reload() action. Every argument — including multi-word -f/-a values — needs
+  # %q-style escaping; joining with plain spaces would split them again.
   local list_cmd
   printf -v list_cmd 'python %q' "$SCRIPT_LIST"
   local arg quoted
@@ -87,21 +98,16 @@ show_interactive() {
   local create_db_cmd
   printf -v create_db_cmd 'python %q --quiet' "$SCRIPT_CREATE_DB"
 
-  # Ctrl-R: rebuild the pacman cache, refresh the visible list using the exact
-  # same filters this invocation started with, then stamp the header with the
-  # time it happened — so hitting ctrl-r twice is visibly distinguishable, not
-  # just the same static message both times. transform-header runs a command
-  # and uses its output as the header text; requires a fairly recent fzf
-  # (newer than the change-header action, which itself needs fzf >= 0.42).
-  # The \$(...) here is intentionally escaped so *fzf's* shell evaluates it
-  # when the bind fires, not pacfz's shell while building this string.
+  # Ctrl-R: rebuild the cache, refresh the visible list with the same filters,
+  # then stamp the header with the time. transform-header needs a fairly recent
+  # fzf. The \$(...) is escaped so *fzf's* shell evaluates it when the bind
+  # fires, not pacfz's shell while building this string.
   local refresh_bind="ctrl-r:execute-silent($create_db_cmd)+reload($list_cmd)+transform-header(echo ✓ cache refreshed at \$(date +%H:%M:%S))"
 
-  # 20 lines of preview info + 4 lines of top/bottom border + 2 lines notes
   local fzf_opts=(
     --height=26
     --preview-window=right,70%
-    --preview "printf '%s\n' {} | python $SCRIPT_PREVIEW $notes_flag"
+    --preview "$preview_cmd"
     --bind "$refresh_bind"
   )
 
@@ -111,7 +117,7 @@ show_interactive() {
 
   echo "$package_list" \
   | fzf "${fzf_opts[@]}" \
-  | python "$SCRIPT_PREVIEW" $notes_flag
+  | python "$SCRIPT_PREVIEW"$notes_flag
 }
 
 create_database() {
@@ -126,8 +132,7 @@ EXACT_MATCH="false"
 SHOW_NOTES="true"
 PYTHON_ARGS=()
 
-# First pass: detect bash-only flags so they can influence show_interactive()
-# regardless of their position in the argument list.
+# First pass: detect bash-only flags regardless of position.
 for arg in "$@"; do
   case "$arg" in
     --exact)      EXACT_MATCH="true"  ;;
@@ -135,10 +140,8 @@ for arg in "$@"; do
   esac
 done
 
-# Build the argument array forwarded to Python scripts, stripping bash-only
-# flags. Using an array (rather than a plain string) preserves any argument
-# containing spaces — important now that -f/-a take free-text values like
-# package descriptions.
+# Build the argument array forwarded to Python, stripping bash-only flags.
+# An array (not a string) preserves values containing spaces.
 for arg in "$@"; do
   if [[ "$arg" != "--exact" && "$arg" != "--hide-notes" ]]; then
     PYTHON_ARGS+=("$arg")
@@ -168,19 +171,16 @@ if [[ $# -gt 0 ]]; then
       exit 0
       ;;
     --exact)
-      # --exact alone (or combined with filter flags via PYTHON_ARGS)
       package_list=$(python "$SCRIPT_LIST" "${PYTHON_ARGS[@]}")
       show_interactive
       exit 0
       ;;
     --hide-notes)
-      # --hide-notes alone (or combined with filter flags via PYTHON_ARGS)
       package_list=$(python "$SCRIPT_LIST" "${PYTHON_ARGS[@]}")
       show_interactive
       exit 0
       ;;
     -D)
-      # Delegate entirely to noteManager; pass $@ so it sees -D <pkg> [note|-d]
       python "$SCRIPT_NOTES" "$@"
       exit 0
       ;;

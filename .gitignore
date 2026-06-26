@@ -1,0 +1,13 @@
+# makepkg build artifacts
+pkg/
+src/
+*.pkg.tar.*
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Editors
+*.swp

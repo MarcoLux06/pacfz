@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
 # pacq - non-interactive query into the pacman package database.
-# Forwards all flags straight to listPackages.py except -h/--help,
+# Forwards all flags straight to list_packages.py except -h/--help,
 # which prints this script's own usage instead of argparse's.
 
-SCRIPT_LIST="$HOME/.local/share/pacfz/listPackages.py"
+# Find list_packages.py either next to this script (running straight from a
+# git checkout) or under /usr/share/pacfz (installed via the PKGBUILD).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/list_packages.py" ]]; then
+  PACFZ_LIBDIR="$SCRIPT_DIR"
+else
+  PACFZ_LIBDIR="/usr/share/pacfz"
+fi
+SCRIPT_LIST="$PACFZ_LIBDIR/list_packages.py"
 
 show_usage() {
   echo "Usage: pacq [OPTIONS]"
   echo ""
   echo "Non-interactive package query (no fzf). All options are forwarded"
-  echo "to listPackages.py."
+  echo "to list_packages.py."
   echo ""
   echo "Filter Options:"
   echo "  -m, --foreign       Show only foreign packages"
@@ -40,7 +48,7 @@ show_usage() {
   echo "  --desc              Sort descending (applies to whichever field is sorted)"
   echo ""
   echo "Other:"
-  echo "  -t, --totalsize     Show total size of all packages"
+  echo "  -t, --totalsize     Show total size of the (filtered) packages"
   echo "  -h, --help          Show this help message"
 }
 

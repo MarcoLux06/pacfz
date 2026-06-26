@@ -1,0 +1,24 @@
+Name            : firefox
+Version         : 1.0-1
+Description     : A web browser
+Architecture    : x86_64
+Depends On      : gtk3  libxt
+Optional Deps   : ffmpeg: H.264/AAC video support
+                  libnotify: desktop notifications
+                  speech-dispatcher: text-to-speech
+Required By      : None
+Optional For    : None
+Install Reason  : Explicitly installed
+Installed Size   : 2.34 MiB
+Validated By     : Signature
+
+Name            : libnotify
+Version         : 2.0-1
+Description     : Library for sending desktop notifications
+Architecture    : x86_64
+Depends On      : glib2
+Required By      : firefox
+Optional For    : None
+Install Reason  : Installed as a dependency for another package
+Installed Size   : 100.00 KiB
+Validated By     : Signature
