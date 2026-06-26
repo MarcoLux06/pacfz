@@ -1,6 +1,6 @@
 # Maintainer: marco-l
 pkgname=pacfz
-pkgver=1.0.1
+pkgver=1.0.2
 pkgrel=1
 pkgdesc="Interactive fzf/CLI explorer for installed pacman packages, with a cached SQLite metadata store and per-package notes"
 arch=('any')
