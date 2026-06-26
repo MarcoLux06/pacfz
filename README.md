@@ -9,8 +9,7 @@ front-ends over it:
 - **`pacq`** — the same query engine, non-interactive, one package name per
   line. Pipe it into anything.
 
-Plus per-package **notes** ("built from source, don't let the AUR helper touch
-it"), attached to packages and shown in the preview.
+Plus per-package **notes**, attached to a package and shown in the preview.
 
 ## Requirements
 
@@ -21,94 +20,103 @@ it"), attached to packages and shown in the preview.
 ## Install
 
 ```sh
-makepkg -si          # or: make install
+makepkg -si
 ```
 
-This builds and installs `pacfz` as a normal pacman package: launchers in
-`/usr/bin`, the Python modules in `/usr/share/pacfz`, docs in
-`/usr/share/doc/pacfz`, and the license in `/usr/share/licenses/pacfz`. It also
-registers pacfz with pacman, so `pacman -Qi pacfz`, upgrades, and `pacman -R
-pacfz` (or `make uninstall`) all work as expected — fitting, for a tool whose
-whole purpose is inspecting installed packages.
+This builds and installs `pacfz` as a normal pacman package:
 
-The PKGBUILD deliberately does **not** run the test suite as part of
-`makepkg -si` — doing so would pull in `python-pytest` (and its dependency
-chain) for every install, just to use the program. If you want to run the
-tests yourself — e.g. before trusting a build, or after pulling new code —
-see [Running the tests](#running-the-tests) below; it's a separate, optional
-step.
+| What                      | Where                       |
+| ------------------------- | --------------------------- |
+| `pacfz`, `pacq` launchers | `/usr/bin`                  |
+| Python modules            | `/usr/share/pacfz`          |
+| License                   | `/usr/share/licenses/pacfz` |
 
-If you're publishing releases, see [Releasing](#releasing-tagging-for-the-pkgbuild)
-below — `pkgver` and the checksum need to stay in sync with your Codeberg tags.
-
-### Running from a checkout without installing
-
-You don't need to package or install anything to try it out or to develop:
-`./pacfz` and `./pacq` look for their Python modules next to themselves first,
-and only fall back to `/usr/share/pacfz` if they're not found there. So from a
-git checkout:
-
-```sh
-./pacfz -m            # just works, no install step
-```
-
-### After installing (either way)
+Because it's a real pacman package, `pacman -Qi pacfz` shows it as installed,
+and the usual commands work as expected.
 
 The cache is built automatically on first run, so you can go straight to
 `pacfz`. Rebuild it any time with `pacfz -r`, or from inside the picker with
 **ctrl-r** (which refreshes the visible list in place and stamps the header
 with the time).
 
-## Repository layout
+### Quick look without installing
 
-The PKGBUILD's `package()` function `cd "$pkgname"` (i.e. `cd pacfz`) right
-after extracting the release tarball, then expects to find `config.py`,
-`list_packages.py`, `pacfz`, `pacq`, `tests/`, etc. *directly* inside that
-directory — not nested under something like `src/` or `pacfz-core/`. That's
-because Codeberg/Gitea release tarballs extract to a top-level folder named
-after the repository itself (just `pacfz`), unlike GitHub's `repo-tag`
-naming. So:
+You can also just run `./pacfz` / `./pacq` straight from the downloaded
+folder — they look for their Python modules next to themselves first, so no
+install step is required to try it out.
 
-- Keep everything flat at the repo root, exactly as it is now. If you ever
-  restructure into subdirectories, update the `cd` path in `PKGBUILD`'s
-  `package()` to match, or the package will fail to build.
-- The repo name on Codeberg must stay `pacfz` to match `$pkgname` in
-  `PKGBUILD` — the `source=()` URL and the post-extraction `cd "$pkgname"`
-  both assume that.
-- Tags must be named `v$pkgver` (e.g. `v1.0.0`), matching the `source=()` URL
-  pattern `$url/archive/v$pkgver.tar.gz`.
+### Uninstall
 
-**Yes, commit `PKGBUILD` (and `LICENSE`, `.gitignore`) to the repo**, at the
-root, alongside `README.md`. That's the standard convention — anyone cloning
-the repo or grabbing a release tarball should be able to run `makepkg -si`
-immediately, without fetching anything from elsewhere. (A separate `.SRCINFO`
-file is only needed if you later mirror this into the official AUR, which
-uses its own git repo per package and reads `.SRCINFO` instead of executing
-`PKGBUILD`. For installing straight from your own Codeberg repo, it's not
-required — see the `srcinfo` Makefile target if you ever need to generate it.)
+```sh
+sudo pacman -R pacfz
+```
+
+This removes the launchers and Python modules pacman tracked. It does **not**
+delete your package cache or notes — see [Where your files live](#where-your-files-live)
+below. Remove those by hand if you want a clean slate.
+
+### Upgrade
+
+Grab the new release, then run `makepkg -si` again from that folder — pacman
+detects you already have an older version installed and replaces it. No
+separate "upgrade" command needed.
 
 ## Usage
 
-`pacfz` (interactive) and `pacq` (non-interactive) share the same filters:
+`pacfz` and `pacq` share the same flags (`pacfz -h` / `pacq -h` for this same
+text):
 
-| Flag | Meaning |
-|------|---------|
-| `-m, --foreign` | foreign (AUR / non-repo) packages |
-| `-o, --orphans` | orphans (see the note below) |
-| `-e, --explicit` | explicitly installed |
-| `-d, --deps` | installed as a dependency |
-| `-n, --notadep` | not required by anything |
-| `-k, --notoptdep` | not an optional dependency for anything |
-| `--has-note` / `--no-note` | filter by presence of a user note |
-| `-f, --field FIELD VALUE` | field matches value (repeatable, AND-combined) |
-| `-a, --any VALUE` | any field matches value (repeatable) |
-| `-x, --exact-match` | exact equality instead of substring for `-f`/`-a` |
-| `-s, --sort-by [FIELD]` | sort (default `Name`; bare `-s` sorts by size) |
-| `--asc` / `--desc` | sort direction |
-| `-t, --totalsize` | total installed size of the **filtered** set |
+```
+Usage: pacfz [OPTIONS]
 
-By default `-f`/`-a` do case-sensitive substring matching; add `-x` for exact
-equality.
+Filter Options:
+  -m, --foreign       Show only foreign packages
+  -o, --orphans       Show only orphan packages
+  -e, --explicit      Show only explicitly installed packages
+  -d, --deps          Show only dependency packages
+  -n, --notadep       Not a dependency for anything
+  -k, --notoptdep     Not an optional dependency for anything
+  --has-note          Only packages that have a user note
+  --no-note           Only packages without a user note
+  -f, --field F V     Only packages where field F matches value V
+                      (repeatable, AND-combined; e.g. -f Name vim)
+  -a, --any V         Only packages where any field matches value V
+                      (repeatable, AND-combined with everything else)
+  -x, --exact-match   Use exact equality (instead of substring) for -f/-a
+  -v, --invert [F]    Bare -v inverts the entire result, applied last.
+                      -v FILTER (repeatable) inverts only that one canned
+                      filter, leaving every other active filter untouched
+                      (e.g. -e -v notadep -v notoptdep = explicit packages
+                      where NOT(notadep AND notoptdep)). FILTER is one of:
+                      foreign/orphan/explicit/deps/notadep/notoptdep or
+                      their short letters m/o/e/d/n/k
+
+Sort Options:
+  -s, --sort-by [F]   Sort by field F (default field: Name; bare -s means
+                      Installed_Size; --size also still works)
+  --asc               Sort ascending (applies to whichever field is sorted)
+  --desc              Sort descending (applies to whichever field is sorted)
+
+Display Options:
+  --exact             Use exact matching in fzf (-e flag)
+  --hide-notes        Hide user notes in the preview pane
+  -t, --totalsize     Show total size of the (filtered) packages
+
+Notes:
+  -D <pkg> <note>     Set a note for a package
+  -D <pkg> -d         Delete the note for a package
+  --notes-list        List all packages that have notes
+
+Other:
+  -h, --help          Show this help message
+  -r, --refresh       Refresh the package database
+
+Inside the interactive picker:
+  ctrl-r              Rebuild the package cache and refresh the visible
+                      list, without leaving fzf — the header shows
+                      '✓ cache refreshed at HH:MM:SS' when done, so
+                      repeated presses are visibly distinct
+```
 
 ### Examples
 
@@ -126,14 +134,14 @@ pacfz -m                     # browse foreign packages interactively
 This is the one piece worth reading carefully, because bare `-v` and
 `-v FILTER` do deliberately different things.
 
-**Bare `-v`** inverts *everything else you asked for*, as a single unit, last:
+**Bare `-v`** inverts _everything else you asked for_, as a single unit, last:
 
 ```sh
 pacq -m -v                   # NOT foreign
 pacq -f Name python -v       # packages whose name does NOT contain "python"
 ```
 
-**`-v FILTER`** inverts *only that one named filter* and leaves your other
+**`-v FILTER`** inverts _only that one named filter_ and leaves your other
 filters in place as preconditions. It's repeatable, and the named filters are
 AND-ed together inside the negation:
 
@@ -151,91 +159,41 @@ pacq -e -v notadep -v notoptdep
 
 ### Notes
 
-```sh
-pacfz -D firefox "daily driver, keep on stable"   # set a note
-pacfz -D firefox -d                                # delete it
-pacfz --notes-list                                 # list all notes
-pacq --has-note                                    # packages that have a note
-```
-
 Notes show up in the `pacfz` preview pane. Pass `--hide-notes` to suppress
 them (the notes DB isn't even opened in that case).
 
 ## A note on "orphan"
 
-Here, **orphan** means: installed as a dependency *and* now required by
+Here, **orphan** means: installed as a dependency _and_ now required by
 nothing (`Install Reason = dependency AND Required By = None`) — the usual
-`pacman -Qdt` sense. It does **not** consider *optional*-dependency
-relationships, so a package that is only an *optional* dependency of something
+`pacman -Qdt` sense. It does **not** consider _optional_-dependency
+relationships, so a package that is only an _optional_ dependency of something
 still counts as an orphan. If you want to exclude things that are an optional
 dependency for something, combine filters, e.g. `pacq -o -k` (orphans that are
 also not an optional dependency for anything).
 
-(Internally, "None" is the literal string pacman prints for an empty field and
-is stored verbatim — it is not SQL `NULL`.)
+## Where your files live
 
-## Configuration
+| File             | Default location                    | Override              |
+| ---------------- | ----------------------------------- | --------------------- |
+| Package cache DB | `~/.cache/pacman_packages.db`       | `PACFZ_DB_PATH`       |
+| Notes DB         | `~/.local/share/pacfz/user_data.db` | `PACFZ_NOTES_DB_PATH` |
 
-All paths honor the XDG base-directory spec and can be overridden:
+Both defaults follow the XDG base-directory spec, so they move automatically
+if you've customized `XDG_CACHE_HOME` / `XDG_DATA_HOME`. Neither survives a
+`pacman -R pacfz` uninstall — pacman only removes the files it installed, not
+data the program created while running.
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `XDG_CACHE_HOME` | `~/.cache` | location of the package cache DB |
-| `XDG_DATA_HOME` | `~/.local/share` | location of the per-user notes DB |
-| `PACFZ_DB_PATH` | `$XDG_CACHE_HOME/pacman_packages.db` | override the cache DB path outright |
-| `PACFZ_NOTES_DB_PATH` | `$XDG_DATA_HOME/pacfz/user_data.db` | override the notes DB path outright |
-
-Note these are unrelated to where the Python modules themselves live
-(`/usr/share/pacfz` once installed via the PKGBUILD, or the checkout directory
-when run directly) — that's a fixed lookup in `pacfz`/`pacq`, not something
-governed by XDG variables.
-
-The cache is rebuilt atomically (built in a temp file, then swapped into place),
-so a rebuild — including a ctrl-r refresh while the preview pane is reading —
-never exposes a half-written database.
-
-## Releasing: tagging for the PKGBUILD
-
-The `PKGBUILD` pulls its source from a tagged Codeberg release archive, not
-from `main` directly, so a tag is what makes a version installable via
-`makepkg -si`.
-
-1. Bump `pkgver` (and reset `pkgrel=1`) in `PKGBUILD`.
-2. Commit, then tag and push: `git tag v1.0.0 && git push origin v1.0.0`.
-   Codeberg auto-generates `https://codeberg.org/marco-l/pacfz/archive/v1.0.0.tar.gz`
-   for any tag — no separate "release" step is required for this to work,
-   though making a proper Release on Codeberg's UI is still nice for
-   changelogs.
-3. Refresh the checksum so `makepkg` can verify the tarball:
-   ```sh
-   updpkgsums          # or: makepkg -g >> PKGBUILD, then dedupe by hand
-   ```
-4. Commit the updated `PKGBUILD` (with the new `sha256sums`).
-5. Optionally regenerate `.SRCINFO` if you're mirroring this into the AUR:
-   ```sh
-   makepkg --printsrcinfo > .SRCINFO
-   ```
-
-If you bump `pkgrel` only (packaging fix, no source change), the existing
-checksum stays valid — you're not re-fetching the tarball.
+The cache is rebuilt atomically (built in a temp file, then swapped into
+place), so a rebuild — including a ctrl-r refresh while the preview pane is
+reading — never exposes a half-written database.
 
 ## Running the tests
 
-These are entirely optional and separate from installing the package — see
-[Install](#install) above for why `makepkg -si` doesn't run them itself.
+Optional, and separate from installing the package — `makepkg -si` doesn't
+run these.
 
 ```sh
-make test        # equivalent to: python3 -m pytest tests/ -q
-make check       # bash -n syntax check on the launchers
+sudo pacman -S python-pytest   # one-time, not installed as a dependency
+make test
 ```
-
-`make test` requires `python-pytest`, which is **not** installed as a
-dependency of the package — install it yourself first if you want to run the
-suite:
-
-```sh
-sudo pacman -S python-pytest
-```
-
-The suite runs against bundled fixture databases (no pacman required) by
-pointing `PACFZ_DB_PATH` / `PACFZ_NOTES_DB_PATH` at scratch copies.

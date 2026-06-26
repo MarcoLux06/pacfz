@@ -1,6 +1,6 @@
 # Maintainer: marco-l <CHANGE_ME@example.com>
 pkgname=pacfz
-pkgver=1.0.0
+pkgver=1.0.1
 pkgrel=1
 pkgdesc="Interactive fzf/CLI explorer for installed pacman packages, with a cached SQLite metadata store and per-package notes"
 arch=('any')
@@ -35,6 +35,5 @@ package() {
   install -Dm644 config.py notes_db.py preview_item.py list_packages.py \
     create_db.py note_manager.py -t "$pkgdir/usr/share/pacfz/"
 
-  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname/"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
 }
