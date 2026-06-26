@@ -1,9 +1,3 @@
-# makepkg's own scratch directories are named "src" and "pkg" by default —
-# the same name we use for our actual tracked source tree. BUILDDIR moves
-# those scratch directories entirely outside the repo (and outside any name
-# collision), so building never clutters or touches ./src.
-BUILDDIR ?= /tmp/makepkg-pacfz
-
 .PHONY: test check build install uninstall srcinfo clean
 
 test:
@@ -13,12 +7,15 @@ check:
 	@for l in src/pacfz src/pacq; do bash -n $$l && echo "$$l: syntax OK"; done
 
 # Build the pacman package. Does NOT run the test suite (see PKGBUILD).
+# All output (build.env redirects it) ends up in build/, not the repo root.
 build:
-	BUILDDIR=$(BUILDDIR) makepkg -s
+	mkdir -p build
+	bash -c 'source build.env && exec makepkg -s'
 
 # Build and install it.
 install:
-	BUILDDIR=$(BUILDDIR) makepkg -si
+	mkdir -p build
+	bash -c 'source build.env && exec makepkg -si'
 
 uninstall:
 	sudo pacman -R pacfz
@@ -28,5 +25,5 @@ srcinfo:
 	makepkg --printsrcinfo > .SRCINFO
 
 clean:
-	rm -rf $(BUILDDIR) *.pkg.tar.* tests/__pycache__ src/lib/__pycache__ .pytest_cache
+	rm -rf build tests/__pycache__ src/lib/__pycache__ .pytest_cache
 	find . -name '*.pyc' -delete

@@ -20,8 +20,13 @@ Plus per-package **notes**, attached to a package and shown in the preview.
 ## Install
 
 ```sh
-makepkg -si
+make install
 ```
+
+(equivalent to `makepkg -si`, but keeps every build artifact under `build/`
+instead of the repo root — see [Keeping builds out of the repo](#keeping-builds-out-of-the-repo)
+below. If you'd rather not use `make`, run
+`source build.env && makepkg -si` instead, for the same effect.)
 
 This builds and installs `pacfz` as a normal pacman package:
 
@@ -57,9 +62,27 @@ below. Remove those by hand if you want a clean slate.
 
 ### Upgrade
 
-Grab the new release, then run `makepkg -si` again from that folder — pacman
+Grab the new release, then `make install` again from that folder — pacman
 detects you already have an older version installed and replaces it. No
 separate "upgrade" command needed.
+
+### Keeping builds out of the repo
+
+`make build`/`make install` source `build.env`, which redirects everything
+`makepkg` produces — the extracted source, the staged install tree, the
+final `.pkg.tar.zst`, logs — into `build/` (already gitignored) instead of
+the repo root. If you build with a bare `makepkg -si` instead, source that
+file first to get the same behavior:
+
+```sh
+source build.env && makepkg -si
+```
+
+This only affects the shell session you run it in. If you'd rather have
+*every* `makepkg` build on your machine redirect to a `build/` next to
+wherever you run it — not just this project — set the same five variables
+in `~/.makepkg.conf` instead; that applies automatically with no per-build
+step, but affects every package you build, not just this one.
 
 ## Usage
 

@@ -4,8 +4,10 @@
 # `makepkg` directly without going through `make build`/`make install`.
 /pkg/
 *.pkg.tar.*
+*.tar.gz
 *.log
 .SRCINFO
+/build/
 
 # Python
 __pycache__/
