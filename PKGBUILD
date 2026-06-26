@@ -1,6 +1,6 @@
 # Maintainer: marco-l <CHANGE_ME@example.com>
 pkgname=pacfz
-pkgver=1.0.3
+pkgver=1.0.4
 pkgrel=1
 pkgdesc="Interactive fzf/CLI explorer for installed pacman packages, with a cached SQLite metadata store and per-package notes"
 arch=('any')
@@ -10,7 +10,7 @@ depends=('python')
 optdepends=('fzf: required for the interactive pacfz picker (pacq works without it)')
 
 # Gitea/Codeberg release tarballs extract to a directory named after the repo
-# itself (just "pacfz"), not "pacfz-$pkgver" — unlike GitHub. The package()
+# itself (just "pacfz"), not "pacfz-$pkgver" - unlike GitHub. The package()
 # function below `cd`s into that directory accordingly.
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 
@@ -23,7 +23,7 @@ sha256sums=('SKIP')
 # python-pytest (and its own dependency chain) as a checkdepends for every
 # install, which is unwanted overhead for someone who just wants to use the
 # tool. Run `make test` by hand in the checkout if you want to verify it
-# yourself before packaging — see the README.
+# yourself before packaging - see the README.
 
 package() {
   cd "$pkgname"

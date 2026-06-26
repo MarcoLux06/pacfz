@@ -2,7 +2,7 @@
 
 Previously this logic was copy-pasted across preview_item.py, note_manager.py
 and list_packages.py; keeping it in one module stops the copies from drifting
-apart. These functions are deliberately I/O-only and never print — the CLI
+apart. These functions are deliberately I/O-only and never print - the CLI
 layer (note_manager.py) is responsible for user-facing messages.
 """
 import os
@@ -51,7 +51,7 @@ def ensure_db(db_path: Optional[str] = None) -> None:
 def get_note(name: str, db_path: Optional[str] = None) -> Optional[str]:
     """Return the note for a package, or None.
 
-    Never creates the DB — safe in read-only contexts. Returns None if the DB
+    Never creates the DB - safe in read-only contexts. Returns None if the DB
     doesn't exist, the package has no note, or on any DB error.
     """
     db_path = _path(db_path)
@@ -93,7 +93,7 @@ def list_notes_rows(db_path: Optional[str] = None) -> List[Tuple[str, str]]:
     """Return all (name, note) rows ordered by name.
 
     Raises:
-        RuntimeError: on a DB error (a missing DB is not an error — returns []).
+        RuntimeError: on a DB error (a missing DB is not an error - returns []).
     """
     db_path = _path(db_path)
     if not os.path.exists(db_path):

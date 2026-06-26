@@ -67,7 +67,7 @@ show_usage() {
   echo ""
   echo "Inside the interactive picker:"
   echo "  ctrl-r              Rebuild the package cache and refresh the visible"
-  echo "                      list, without leaving fzf — the header shows"
+  echo "                      list, without leaving fzf - the header shows"
   echo "                      '✓ cache refreshed at HH:MM:SS' when done, so"
   echo "                      repeated presses are visibly distinct"
 }
@@ -91,7 +91,7 @@ show_interactive() {
   local preview_cmd="printf '%s\n' {} | python \"$SCRIPT_PREVIEW\"$notes_flag"
 
   # Build a properly-quoted "python list_packages.py <args>" string for fzf's
-  # reload() action. Every argument — including multi-word -f/-a values — needs
+  # reload() action. Every argument - including multi-word -f/-a values - needs
   # %q-style escaping; joining with plain spaces would split them again.
   local list_cmd
   printf -v list_cmd 'python %q' "$SCRIPT_LIST"

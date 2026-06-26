@@ -2,9 +2,7 @@
 # the repo root, but Makefile/this project override BUILDDIR so makepkg
 # never writes them here. This is just defensive, in case someone runs
 # `makepkg` directly without going through `make build`/`make install`.
-/pkg/
-*.pkg.tar.*
-*.tar.gz
+*.tar.*
 *.log
 .SRCINFO
 /build/
@@ -16,3 +14,4 @@ __pycache__/
 
 # Editors
 *.swp
+.idea

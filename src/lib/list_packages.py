@@ -21,7 +21,7 @@ OPT_REQUIRED_BY_FIELD = 'Optional_For'
 # Canned WHERE clauses.
 #
 # NOTE: 'None' below is pacman's *literal output string* (what `pacman -Qi`
-# prints for an empty field), stored verbatim as TEXT — it is NOT SQL NULL.
+# prints for an empty field), stored verbatim as TEXT - it is NOT SQL NULL.
 # Use '=' here, not 'IS' / 'IS NULL'.
 WHERE_CLAUSES = {
     'foreign': f"{FOREIGN_FIELD} = 1",
@@ -173,7 +173,7 @@ def build_query(where_clauses=None, invert_clauses=None, invert_all=False,
         include_order: append ORDER BY when True (skip it for aggregates).
 
     Returns:
-        (query, params) — query has '?' placeholders, params is the bind list.
+        (query, params) - query has '?' placeholders, params is the bind list.
 
     Raises:
         ValueError: on unknown field/filter names, or invert_all with nothing
@@ -210,7 +210,7 @@ def build_query(where_clauses=None, invert_clauses=None, invert_all=False,
 
         if not invert_group:
             raise ValueError(
-                "--invert has nothing to invert — combine it with at least one "
+                "--invert has nothing to invert - combine it with at least one "
                 "filter (-m/-o/-e/-d/-n/-k/--has-note/--no-note/-f/-a), or use "
                 "-v FILTER to invert just one specific filter"
             )
@@ -288,7 +288,7 @@ def compute_total_size(query_kwargs: dict, notes_filter: Optional[str],
     """Sum Installed_Size over the filtered package set (B2).
 
     Without a notes filter this is a single SUM in SQL. With one, we fetch
-    (name, size) and sum in Python — avoiding a giant `IN (...)` that would
+    (name, size) and sum in Python - avoiding a giant `IN (...)` that would
     blow past SQLite's bound-variable limit on large systems.
     """
     if notes_filter:

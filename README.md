@@ -4,9 +4,9 @@ Deeper inspection of your installed Arch Linux packages. `pacfz` snapshots
 `pacman -Qi` / `pacman -Qqm` into a small SQLite cache and gives you two
 front-ends over it:
 
-- **`pacfz`** — an interactive [fzf](https://github.com/junegunn/fzf) picker
+- **`pacfz`** - an interactive [fzf](https://github.com/junegunn/fzf) picker
   with a rich, colorized preview pane.
-- **`pacq`** — the same query engine, non-interactive, one package name per
+- **`pacq`** - the same query engine, non-interactive, one package name per
   line. Pipe it into anything.
 
 Plus per-package **notes**, attached to a package and shown in the preview.
@@ -15,7 +15,7 @@ Plus per-package **notes**, attached to a package and shown in the preview.
 
 - Arch Linux (or a derivative) with `pacman` and `base-devel` (for `makepkg`).
 - `python3` (standard library only; no third-party packages).
-- `fzf` — required for the interactive `pacfz` front-end. `pacq` works without it.
+- `fzf` - required for the interactive `pacfz` front-end. `pacq` works without it.
 
 ## Install
 
@@ -24,17 +24,17 @@ make install
 ```
 
 (equivalent to `makepkg -si`, but keeps every build artifact under `build/`
-instead of the repo root — see [Keeping builds out of the repo](#keeping-builds-out-of-the-repo)
+instead of the repo root - see [Keeping builds out of the repo](#keeping-builds-out-of-the-repo)
 below. If you'd rather not use `make`, run
 `source build.env && makepkg -si` instead, for the same effect.)
 
 This builds and installs `pacfz` as a normal pacman package:
 
-| What | Where |
-|------|-------|
-| `pacfz`, `pacq` launchers | `/usr/bin` |
-| Python modules | `/usr/share/pacfz` |
-| License | `/usr/share/licenses/pacfz` |
+| What                      | Where                       |
+| ------------------------- | --------------------------- |
+| `pacfz`, `pacq` launchers | `/usr/bin`                  |
+| Python modules            | `/usr/share/pacfz`          |
+| License                   | `/usr/share/licenses/pacfz` |
 
 Because it's a real pacman package, `pacman -Qi pacfz` shows it as installed,
 and the usual commands work as expected.
@@ -47,7 +47,7 @@ with the time).
 ### Quick look without installing
 
 You can also just run `./src/pacfz` / `./src/pacq` straight from the
-downloaded folder — they look for their Python modules in the sibling `lib/`
+downloaded folder - they look for their Python modules in the sibling `lib/`
 directory first, so no install step is required to try it out.
 
 ### Uninstall
@@ -57,20 +57,20 @@ sudo pacman -R pacfz
 ```
 
 This removes the launchers and Python modules pacman tracked. It does **not**
-delete your package cache or notes — see [Where your files live](#where-your-files-live)
+delete your package cache or notes - see [Where your files live](#where-your-files-live)
 below. Remove those by hand if you want a clean slate.
 
 ### Upgrade
 
-Grab the new release, then `make install` again from that folder — pacman
+Grab the new release, then `make install` again from that folder - pacman
 detects you already have an older version installed and replaces it. No
 separate "upgrade" command needed.
 
 ### Keeping builds out of the repo
 
 `make build`/`make install` source `build.env`, which redirects everything
-`makepkg` produces — the extracted source, the staged install tree, the
-final `.pkg.tar.zst`, logs — into `build/` (already gitignored) instead of
+`makepkg` produces - the extracted source, the staged install tree, the
+final `.pkg.tar.zst`, logs - into `build/` (already gitignored) instead of
 the repo root. If you build with a bare `makepkg -si` instead, source that
 file first to get the same behavior:
 
@@ -79,8 +79,8 @@ source build.env && makepkg -si
 ```
 
 This only affects the shell session you run it in. If you'd rather have
-*every* `makepkg` build on your machine redirect to a `build/` next to
-wherever you run it — not just this project — set the same five variables
+_every_ `makepkg` build on your machine redirect to a `build/` next to
+wherever you run it - not just this project - set the same five variables
 in `~/.makepkg.conf` instead; that applies automatically with no per-build
 step, but affects every package you build, not just this one.
 
@@ -136,7 +136,7 @@ Other:
 
 Inside the interactive picker:
   ctrl-r              Rebuild the package cache and refresh the visible
-                      list, without leaving fzf — the header shows
+                      list, without leaving fzf - the header shows
                       '✓ cache refreshed at HH:MM:SS' when done, so
                       repeated presses are visibly distinct
 ```
@@ -157,14 +157,14 @@ pacfz -m                     # browse foreign packages interactively
 This is the one piece worth reading carefully, because bare `-v` and
 `-v FILTER` do deliberately different things.
 
-**Bare `-v`** inverts *everything else you asked for*, as a single unit, last:
+**Bare `-v`** inverts _everything else you asked for_, as a single unit, last:
 
 ```sh
 pacq -m -v                   # NOT foreign
 pacq -f Name python -v       # packages whose name does NOT contain "python"
 ```
 
-**`-v FILTER`** inverts *only that one named filter* and leaves your other
+**`-v FILTER`** inverts _only that one named filter_ and leaves your other
 filters in place as preconditions. It's repeatable, and the named filters are
 AND-ed together inside the negation:
 
@@ -172,7 +172,7 @@ AND-ed together inside the negation:
 # explicit packages that are NOT(orphans):
 pacq -e -v orphan
 
-# explicit packages where NOT(notadep AND notoptdep) —
+# explicit packages where NOT(notadep AND notoptdep) -
 # i.e. explicit packages that ARE required by something, optionally or not:
 pacq -e -v notadep -v notoptdep
 ```
@@ -187,33 +187,33 @@ them (the notes DB isn't even opened in that case).
 
 ## A note on "orphan"
 
-Here, **orphan** means: installed as a dependency *and* now required by
-nothing (`Install Reason = dependency AND Required By = None`) — the usual
-`pacman -Qdt` sense. It does **not** consider *optional*-dependency
-relationships, so a package that is only an *optional* dependency of something
+Here, **orphan** means: installed as a dependency _and_ now required by
+nothing (`Install Reason = dependency AND Required By = None`) - the usual
+`pacman -Qdt` sense. It does **not** consider _optional_-dependency
+relationships, so a package that is only an _optional_ dependency of something
 still counts as an orphan. If you want to exclude things that are an optional
 dependency for something, combine filters, e.g. `pacq -o -k` (orphans that are
 also not an optional dependency for anything).
 
 ## Where your files live
 
-| File | Default location | Override |
-|------|-------------------|----------|
-| Package cache DB | `~/.cache/pacman_packages.db` | `PACFZ_DB_PATH` |
-| Notes DB | `~/.local/share/pacfz/user_data.db` | `PACFZ_NOTES_DB_PATH` |
+| File             | Default location                    | Override              |
+| ---------------- | ----------------------------------- | --------------------- |
+| Package cache DB | `~/.cache/pacman_packages.db`       | `PACFZ_DB_PATH`       |
+| Notes DB         | `~/.local/share/pacfz/user_data.db` | `PACFZ_NOTES_DB_PATH` |
 
 Both defaults follow the XDG base-directory spec, so they move automatically
 if you've customized `XDG_CACHE_HOME` / `XDG_DATA_HOME`. Neither survives a
-`pacman -R pacfz` uninstall — pacman only removes the files it installed, not
+`pacman -R pacfz` uninstall - pacman only removes the files it installed, not
 data the program created while running.
 
 The cache is rebuilt atomically (built in a temp file, then swapped into
-place), so a rebuild — including a ctrl-r refresh while the preview pane is
-reading — never exposes a half-written database.
+place), so a rebuild - including a ctrl-r refresh while the preview pane is
+reading - never exposes a half-written database.
 
 ## Running the tests
 
-Optional, and separate from installing the package — `makepkg -si` doesn't
+Optional, and separate from installing the package - `makepkg -si` doesn't
 run these.
 
 ```sh

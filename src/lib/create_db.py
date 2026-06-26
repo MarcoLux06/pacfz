@@ -75,7 +75,7 @@ def run_pacman_qi(timeout: int = PACMAN_TIMEOUT) -> str:
 def parse_qi_output(output: str) -> List[Dict[str, str]]:
     """Parse `pacman -Qi` text into a list of package dicts.
 
-    This is pure (no I/O) so it can be unit-tested with crafted input — in
+    This is pure (no I/O) so it can be unit-tested with crafted input - in
     particular the wrapped-field handling below.
     """
     packages: List[Dict[str, str]] = []
@@ -95,7 +95,7 @@ def parse_qi_output(output: str) -> List[Dict[str, str]]:
         while i < len(lines):
             line = lines[i]
             # A new field is "Label   : value". pacman pads the label so there
-            # is always whitespace before the ':' — a wrapped value fragment
+            # is always whitespace before the ':' - a wrapped value fragment
             # like "libnotify: notifications" has no space before its colon and
             # therefore won't match here.
             match = re.match(r'^([^:]+?)\s+:\s?(.*)$', line)
@@ -269,8 +269,8 @@ def create_database(db_path: str, *, packages: Optional[List[Dict[str, str]]] = 
     """Create the package cache DB.
 
     The DB is built in a temp file in the same directory and then atomically
-    swapped into place with os.replace (M5): concurrent readers — e.g. the fzf
-    preview pane during a ctrl-r refresh — only ever see the old complete file
+    swapped into place with os.replace (M5): concurrent readers - e.g. the fzf
+    preview pane during a ctrl-r refresh - only ever see the old complete file
     or the new complete file, never a half-built one.
 
     ``packages`` and ``foreign_packages`` can be supplied to bypass pacman
