@@ -1,9 +1,11 @@
-# makepkg build artifacts
-pkg/
-src/
+# makepkg build artifacts — by default these would be "src/" and "pkg/" at
+# the repo root, but Makefile/this project override BUILDDIR so makepkg
+# never writes them here. This is just defensive, in case someone runs
+# `makepkg` directly without going through `make build`/`make install`.
+/pkg/
 *.pkg.tar.*
-*.tar.gz
 *.log
+.SRCINFO
 
 # Python
 __pycache__/
@@ -12,5 +14,3 @@ __pycache__/
 
 # Editors
 *.swp
-.idea
-TODO.md

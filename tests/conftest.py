@@ -12,10 +12,11 @@ import tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
+LIB_DIR = ROOT / 'src' / 'lib'
 FIXTURES = HERE / 'fixtures'
 
-# Make the project modules importable.
-sys.path.insert(0, str(ROOT))
+# Make the project modules importable (they live in src/lib now, not the repo root).
+sys.path.insert(0, str(LIB_DIR))
 
 # Scratch copies of the fixture DBs for this test session.
 _TMP = tempfile.mkdtemp(prefix='pacfz-test-')
@@ -43,6 +44,12 @@ def notes_db_path_fixture():
 @pytest.fixture
 def project_root():
     return ROOT
+
+
+@pytest.fixture
+def lib_dir():
+    """Where list_packages.py / preview_item.py etc. live, for subprocess tests."""
+    return LIB_DIR
 
 
 @pytest.fixture

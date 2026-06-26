@@ -6,10 +6,10 @@
 # Find list_packages.py either next to this script (running straight from a
 # git checkout) or under /usr/share/pacfz (installed via the PKGBUILD).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$SCRIPT_DIR/list_packages.py" ]]; then
-  PACFZ_LIBDIR="$SCRIPT_DIR"
+if [[ -f "$SCRIPT_DIR/lib/list_packages.py" ]]; then
+  PACFZ_LIBDIR="$SCRIPT_DIR/lib"
 else
-  PACFZ_LIBDIR="/usr/share/pacfz"
+  PACFZ_LIBDIR="/usr/share/pacfz/lib"
 fi
 SCRIPT_LIST="$PACFZ_LIBDIR/list_packages.py"
 

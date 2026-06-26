@@ -22,6 +22,17 @@ def test_convert_size_to_bytes_invalid():
         convert_size_to_bytes("not a size")
 
 
+@pytest.mark.parametrize("text,expected", [
+    ("56,72 KiB", int(56.72 * 1024)),
+    ("2,34 MiB", int(2.34 * 1024 ** 2)),
+    ("1,00 GiB", 1024 ** 3),
+])
+def test_convert_size_to_bytes_comma_locale(text, expected):
+    # pacman formats numbers per the system locale; de_DE/fr_FR etc. use a
+    # comma decimal separator instead of a dot.
+    assert convert_size_to_bytes(text) == expected
+
+
 @pytest.mark.parametrize("value,expected", [
     (0, "0.00 B"),
     (512, "512.00 B"),

@@ -25,11 +25,11 @@ makepkg -si
 
 This builds and installs `pacfz` as a normal pacman package:
 
-| What                      | Where                       |
-| ------------------------- | --------------------------- |
-| `pacfz`, `pacq` launchers | `/usr/bin`                  |
-| Python modules            | `/usr/share/pacfz`          |
-| License                   | `/usr/share/licenses/pacfz` |
+| What | Where |
+|------|-------|
+| `pacfz`, `pacq` launchers | `/usr/bin` |
+| Python modules | `/usr/share/pacfz` |
+| License | `/usr/share/licenses/pacfz` |
 
 Because it's a real pacman package, `pacman -Qi pacfz` shows it as installed,
 and the usual commands work as expected.
@@ -41,9 +41,9 @@ with the time).
 
 ### Quick look without installing
 
-You can also just run `./pacfz` / `./pacq` straight from the downloaded
-folder — they look for their Python modules next to themselves first, so no
-install step is required to try it out.
+You can also just run `./src/pacfz` / `./src/pacq` straight from the
+downloaded folder — they look for their Python modules in the sibling `lib/`
+directory first, so no install step is required to try it out.
 
 ### Uninstall
 
@@ -134,14 +134,14 @@ pacfz -m                     # browse foreign packages interactively
 This is the one piece worth reading carefully, because bare `-v` and
 `-v FILTER` do deliberately different things.
 
-**Bare `-v`** inverts _everything else you asked for_, as a single unit, last:
+**Bare `-v`** inverts *everything else you asked for*, as a single unit, last:
 
 ```sh
 pacq -m -v                   # NOT foreign
 pacq -f Name python -v       # packages whose name does NOT contain "python"
 ```
 
-**`-v FILTER`** inverts _only that one named filter_ and leaves your other
+**`-v FILTER`** inverts *only that one named filter* and leaves your other
 filters in place as preconditions. It's repeatable, and the named filters are
 AND-ed together inside the negation:
 
@@ -164,20 +164,20 @@ them (the notes DB isn't even opened in that case).
 
 ## A note on "orphan"
 
-Here, **orphan** means: installed as a dependency _and_ now required by
+Here, **orphan** means: installed as a dependency *and* now required by
 nothing (`Install Reason = dependency AND Required By = None`) — the usual
-`pacman -Qdt` sense. It does **not** consider _optional_-dependency
-relationships, so a package that is only an _optional_ dependency of something
+`pacman -Qdt` sense. It does **not** consider *optional*-dependency
+relationships, so a package that is only an *optional* dependency of something
 still counts as an orphan. If you want to exclude things that are an optional
 dependency for something, combine filters, e.g. `pacq -o -k` (orphans that are
 also not an optional dependency for anything).
 
 ## Where your files live
 
-| File             | Default location                    | Override              |
-| ---------------- | ----------------------------------- | --------------------- |
-| Package cache DB | `~/.cache/pacman_packages.db`       | `PACFZ_DB_PATH`       |
-| Notes DB         | `~/.local/share/pacfz/user_data.db` | `PACFZ_NOTES_DB_PATH` |
+| File | Default location | Override |
+|------|-------------------|----------|
+| Package cache DB | `~/.cache/pacman_packages.db` | `PACFZ_DB_PATH` |
+| Notes DB | `~/.local/share/pacfz/user_data.db` | `PACFZ_NOTES_DB_PATH` |
 
 Both defaults follow the XDG base-directory spec, so they move automatically
 if you've customized `XDG_CACHE_HOME` / `XDG_DATA_HOME`. Neither survives a

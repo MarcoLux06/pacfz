@@ -1,6 +1,6 @@
-# Maintainer: marco-l
+# Maintainer: marco-l <CHANGE_ME@example.com>
 pkgname=pacfz
-pkgver=1.0.2
+pkgver=1.0.0
 pkgrel=1
 pkgdesc="Interactive fzf/CLI explorer for installed pacman packages, with a cached SQLite metadata store and per-package notes"
 arch=('any')
@@ -18,6 +18,7 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 # tarball once v$pkgver is tagged on Codeberg. Until then this build will
 # only work with --skipinteg / --skippgpcheck-style local testing.
 sha256sums=('SKIP')
+
 # Deliberately no check(): running the test suite would pull in
 # python-pytest (and its own dependency chain) as a checkdepends for every
 # install, which is unwanted overhead for someone who just wants to use the
@@ -27,12 +28,13 @@ sha256sums=('SKIP')
 package() {
   cd "$pkgname"
 
-  install -Dm755 pacfz "$pkgdir/usr/bin/pacfz"
-  install -Dm755 pacq  "$pkgdir/usr/bin/pacq"
+  install -Dm755 src/pacfz "$pkgdir/usr/bin/pacfz"
+  install -Dm755 src/pacq  "$pkgdir/usr/bin/pacq"
 
-  install -d "$pkgdir/usr/share/pacfz"
-  install -Dm644 config.py notes_db.py preview_item.py list_packages.py \
-    create_db.py note_manager.py -t "$pkgdir/usr/share/pacfz/"
+  install -d "$pkgdir/usr/share/pacfz/lib"
+  install -Dm644 src/lib/config.py src/lib/notes_db.py src/lib/preview_item.py \
+    src/lib/list_packages.py src/lib/create_db.py src/lib/note_manager.py \
+    -t "$pkgdir/usr/share/pacfz/lib/"
 
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
 }

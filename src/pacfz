@@ -3,11 +3,17 @@
 # Find the Python modules either next to this script (running straight from a
 # git checkout, no install needed) or under /usr/share/pacfz (where the
 # PKGBUILD puts them once installed via `makepkg -si`).
+# Find the Python modules either in lib/ next to this script (running
+# straight from a git checkout, no install needed) or under
+# /usr/share/pacfz/lib (where the PKGBUILD puts them once installed via
+# `makepkg -si`). Both layouts mirror each other exactly (src/lib <->
+# /usr/share/pacfz/lib), so the only thing that ever changes here is the
+# base path.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$SCRIPT_DIR/list_packages.py" ]]; then
-  PACFZ_LIBDIR="$SCRIPT_DIR"
+if [[ -f "$SCRIPT_DIR/lib/list_packages.py" ]]; then
+  PACFZ_LIBDIR="$SCRIPT_DIR/lib"
 else
-  PACFZ_LIBDIR="/usr/share/pacfz"
+  PACFZ_LIBDIR="/usr/share/pacfz/lib"
 fi
 SCRIPT_LIST="$PACFZ_LIBDIR/list_packages.py"
 SCRIPT_PREVIEW="$PACFZ_LIBDIR/preview_item.py"
