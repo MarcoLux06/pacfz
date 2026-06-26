@@ -141,6 +141,11 @@ def parse_pacman_qi(timeout: int = PACMAN_TIMEOUT) -> List[Dict[str, str]]:
 def convert_size_to_bytes(size_str: str) -> int:
     """Convert a size string (e.g. "2.34 MiB") to bytes.
 
+    pacman formats numbers using the system locale, so on a machine set to a
+    locale that uses a comma as the decimal separator (e.g. de_DE, fr_FR),
+    `pacman -Qi` prints sizes like "56,72 KiB" instead of "56.72 KiB". Both
+    are accepted here and normalized to a dot before parsing as a float.
+
     Raises:
         ValueError: if the format is invalid.
     """
@@ -148,11 +153,11 @@ def convert_size_to_bytes(size_str: str) -> int:
         return 0
 
     size_str = size_str.strip()
-    match = re.match(r'^([\d.]+)\s*([KMGT]i?B|B)$', size_str)
+    match = re.match(r'^([\d.,]+)\s*([KMGT]i?B|B)$', size_str)
     if not match:
         raise ValueError(f"Invalid size format: '{size_str}'")
 
-    number = float(match.group(1))
+    number = float(match.group(1).replace(',', '.'))
     unit = match.group(2)
     units = {
         'B': 1,

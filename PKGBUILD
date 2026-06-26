@@ -1,4 +1,4 @@
-# Maintainer: marco-l <CHANGE_ME@example.com>
+# Maintainer: marco-l
 pkgname=pacfz
 pkgver=1.0.1
 pkgrel=1
