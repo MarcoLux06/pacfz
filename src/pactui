@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""Prototype Textual TUI front-end for pacfz — the package overview view.
+
+This is a third front-end alongside `pacfz` (fzf-interactive) and `pacq`
+(non-interactive), not a replacement for either. It reuses the exact same
+data layer (list_packages.py, notes_db.py, preview_item.py) by importing
+them directly rather than shelling out — no subprocess, no text parsing.
+
+Prototype scope: just the package overview screen (search + facet filters
++ table + preview). Multiple screens (dependency tree, history) come later.
+"""
+import os
+import sys
+
+# Resolve the sibling lib/ directory the same way the bash launchers do:
+# next to this script in a dev checkout, or /usr/share/pacfz/lib once
+# installed via the PKGBUILD.
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_LIB_DIR = os.path.join(_SCRIPT_DIR, 'lib')
+if not os.path.isfile(os.path.join(_LIB_DIR, 'list_packages.py')):
+    _LIB_DIR = '/usr/share/pacfz/lib'
+sys.path.insert(0, _LIB_DIR)
+
+from typing import Optional
+
+from rich.text import Text
+from textual.app import App, ComposeResult
+from textual.containers import Horizontal, Vertical
+from textual.widgets import (
+    Checkbox, DataTable, Footer, Header, Input, RadioButton, RadioSet, Static,
+)
+
+import list_packages as lp
+import notes_db
+import preview_item
+
+
+SELECT_COLS = '"Name", "Version", "Installed_Size", "Install_Reason"'
+
+# (column header, width) — Installed_Size is rendered human-readable, not raw.
+COLUMNS = [
+    ("Name", 28),
+    ("Version", 16),
+    ("Size", 10),
+    ("Reason", 22),
+]
+
+
+def _short_reason(reason: str) -> str:
+    """Compact the verbose Install_Reason string for the table column."""
+    if reason == "Explicitly installed":
+        return "explicit"
+    if reason == "Installed as a dependency for another package":
+        return "dependency"
+    return reason or ""
+
+
+class PackageOverview(App):
+    """The package-overview screen: search/filters on the left, preview on the right."""
+
+    CSS = """
+    Screen {
+        layout: horizontal;
+    }
+
+    #left-pane {
+        width: 40%;
+        height: 100%;
+    }
+
+    #search-area {
+        height: 1fr;
+    }
+
+    #package-table {
+        height: 1fr;
+    }
+
+    #filter-area {
+        height: auto;
+        max-height: 9;
+        border-top: solid $accent;
+        padding: 0 1;
+    }
+
+    #filter-row {
+        height: auto;
+    }
+
+    #filter-row > Vertical {
+        width: auto;
+        margin-right: 2;
+    }
+
+    #checkbox-group {
+        layout: grid;
+        grid-size: 2;
+        grid-gutter: 0 2;
+        width: auto;
+    }
+
+    #preview-pane {
+        width: 60%;
+        height: 100%;
+        border-left: solid $accent;
+        padding: 0 1;
+    }
+
+    #preview-content {
+        height: 1fr;
+    }
+    """
+
+    BINDINGS = [
+        ("/", "focus_search", "Search"),
+        ("q", "quit", "Quit"),
+    ]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._current_name: Optional[str] = None
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=False)
+
+        with Horizontal():
+            with Vertical(id="left-pane"):
+                with Vertical(id="search-area"):
+                    yield Input(placeholder="Search by name...", id="search-input")
+                    yield DataTable(id="package-table", cursor_type="row")
+
+                with Vertical(id="filter-area"):
+                    with Horizontal(id="filter-row"):
+                        with Vertical():
+                            yield Static("Type", classes="facet-label")
+                            with RadioSet(id="reason-filter"):
+                                yield RadioButton("Any", value=True)
+                                yield RadioButton("Explicit")
+                                yield RadioButton("Dependency")
+                        with Vertical():
+                            yield Static("Notes", classes="facet-label")
+                            with RadioSet(id="notes-filter"):
+                                yield RadioButton("Any", value=True)
+                                yield RadioButton("Has note")
+                                yield RadioButton("No note")
+                        with Vertical(id="checkbox-group"):
+                            yield Checkbox("Foreign", id="cb-foreign")
+                            yield Checkbox("Orphan", id="cb-orphan")
+                            yield Checkbox("Not a dep", id="cb-notadep")
+                            yield Checkbox("Not opt-dep", id="cb-notoptdep")
+
+            with Vertical(id="preview-pane"):
+                yield Static(id="preview-content")
+
+        yield Footer()
+
+    def on_mount(self) -> None:
+        lp.ensure_cache_db()
+        table = self.query_one("#package-table", DataTable)
+        for header, width in COLUMNS:
+            table.add_column(header, width=width, key=header)
+        self.refresh_results()
+        self.query_one("#search-input", Input).focus()
+
+    # ------------------------------------------------------------------
+    # Filter state -> query
+    # ------------------------------------------------------------------
+    def _build_query_kwargs(self) -> dict:
+        where_clauses = []
+        if self.query_one("#cb-foreign", Checkbox).value:
+            where_clauses.append("foreign")
+        if self.query_one("#cb-orphan", Checkbox).value:
+            where_clauses.append("orphan")
+        if self.query_one("#cb-notadep", Checkbox).value:
+            where_clauses.append("notadep")
+        if self.query_one("#cb-notoptdep", Checkbox).value:
+            where_clauses.append("notoptdep")
+
+        reason = self._radio_label("#reason-filter")
+        if reason == "Explicit":
+            where_clauses.append("explicit")
+        elif reason == "Dependency":
+            where_clauses.append("deps")
+
+        search_text = self.query_one("#search-input", Input).value.strip()
+        field_searches = [("Name", search_text)] if search_text else None
+
+        return dict(
+            where_clauses=where_clauses or None,
+            field_searches=field_searches,
+            select_cols=SELECT_COLS,
+        )
+
+    def _radio_label(self, selector: str) -> Optional[str]:
+        radio_set = self.query_one(selector, RadioSet)
+        if radio_set.pressed_button is None:
+            return None
+        return str(radio_set.pressed_button.label)
+
+    def _notes_filter(self) -> Optional[str]:
+        label = self._radio_label("#notes-filter")
+        if label == "Has note":
+            return "has_note"
+        if label == "No note":
+            return "no_note"
+        return None
+
+    # ------------------------------------------------------------------
+    # Query execution
+    # ------------------------------------------------------------------
+    def refresh_results(self) -> None:
+        table = self.query_one("#package-table", DataTable)
+        table.clear()
+
+        try:
+            query, params = lp.build_query(**self._build_query_kwargs())
+        except ValueError:
+            return
+
+        notes_filter = self._notes_filter()
+        rows = list(lp.iter_rows(query, params, notes_filter))
+
+        for name, version, size, reason in rows:
+            table.add_row(
+                name, version or "", preview_item.bytes_to_human(size),
+                _short_reason(reason), key=name,
+            )
+
+        if rows and table.row_count:
+            table.move_cursor(row=0)
+            self._show_preview(rows[0][0])
+        else:
+            self._current_name = None
+            self.query_one("#preview-content", Static).update("")
+
+    # ------------------------------------------------------------------
+    # Preview
+    # ------------------------------------------------------------------
+    def _show_preview(self, name: str) -> None:
+        self._current_name = name
+        data = preview_item.query_database(name=name)
+        if not data:
+            self.query_one("#preview-content", Static).update("")
+            return
+        note = notes_db.get_note(name)
+        if note:
+            data["Note"] = note
+        rendered = preview_item.render_preview(data)
+        self.query_one("#preview-content", Static).update(Text.from_ansi(rendered))
+
+    # ------------------------------------------------------------------
+    # Events
+    # ------------------------------------------------------------------
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "search-input":
+            self.refresh_results()
+
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        self.refresh_results()
+
+    def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
+        self.refresh_results()
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        if event.row_key.value is not None:
+            self._show_preview(event.row_key.value)
+
+    def action_focus_search(self) -> None:
+        self.query_one("#search-input", Input).focus()
+
+
+if __name__ == "__main__":
+    PackageOverview().run()

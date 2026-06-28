@@ -265,11 +265,15 @@ def _passes_notes_filter(name: str, notes_filter: Optional[str],
     return True
 
 
-def iter_names(query: str, params=None, notes_filter: Optional[str] = None,
-               db_path: str = DB_PATH) -> Iterator[str]:
-    """Yield package names from ``query``, applying the notes filter in Python.
+def iter_rows(query: str, params=None, notes_filter: Optional[str] = None,
+             db_path: str = DB_PATH) -> Iterator[tuple]:
+    """Yield full result rows from ``query``, applying the notes filter.
 
-    The noted-package set is fetched once up front, not once per row.
+    Assumes the first selected column is Name (the notes filter keys off
+    it). The noted-package set is fetched once up front, not once per row.
+    This is the row-level counterpart to iter_names() below, which just
+    extracts the first column — added for frontends (e.g. a table-based
+    TUI) that need more than the bare name per row.
     """
     noted = get_packages_with_notes() if notes_filter else None
     conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)
@@ -278,9 +282,16 @@ def iter_names(query: str, params=None, notes_filter: Optional[str] = None,
         for row in cursor:
             name = row[0]
             if _passes_notes_filter(name, notes_filter, noted):
-                yield name
+                yield row
     finally:
         conn.close()
+
+
+def iter_names(query: str, params=None, notes_filter: Optional[str] = None,
+               db_path: str = DB_PATH) -> Iterator[str]:
+    """Yield package names from ``query``, applying the notes filter in Python."""
+    for row in iter_rows(query, params, notes_filter, db_path):
+        yield row[0]
 
 
 def compute_total_size(query_kwargs: dict, notes_filter: Optional[str],

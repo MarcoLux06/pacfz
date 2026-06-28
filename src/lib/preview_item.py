@@ -156,16 +156,19 @@ def query_database(db_path: Optional[str] = None,
         conn.close()
 
 
-def print_line(key: str, data: Dict[str, str]) -> None:
-    if 'break' in key:
-        print()
-        return
+def _formatted_line_for(key: str, data: Dict[str, str]) -> Optional[str]:
+    """Return the formatted line for `key` against `data`.
 
-    # .get() so keys present in LABEL_FORMAT but absent from the data dict
-    # (e.g. 'Note' when --hide-notes is set) are silently skipped.
+    Returns '' for a break marker (renders as a blank line), or None if
+    `key` isn't present in `data` at all (e.g. 'Note' when no note exists),
+    so callers can skip it entirely.
+    """
+    if 'break' in key:
+        return ''
+
     value = data.get(key)
     if value is None:
-        return
+        return None
 
     if key == 'is foreign':
         value = {1: 'Yes', 0: 'No'}.get(int(value), 'No')
@@ -173,7 +176,29 @@ def print_line(key: str, data: Dict[str, str]) -> None:
     if key == 'Installed Size':
         value = bytes_to_human(value)
 
-    print(format_line(key, value))
+    return format_line(key, value)
+
+
+def print_line(key: str, data: Dict[str, str]) -> None:
+    line = _formatted_line_for(key, data)
+    if line is not None:
+        print(line)
+
+
+def render_preview(data: Dict[str, str]) -> str:
+    """Build the full multi-line ANSI-colored preview for `data` as one string.
+
+    Same content `print_line` prints line-by-line for the CLI, joined into a
+    single string — meant for reuse by other frontends (e.g. a TUI, via
+    Rich's `Text.from_ansi()`), so the formatting logic — colors, field
+    order, keyword highlighting — only ever lives in this one place.
+    """
+    lines = []
+    for category in LABEL_FORMAT:
+        line = _formatted_line_for(category, data)
+        if line is not None:
+            lines.append(line)
+    return '\n'.join(lines)
 
 
 def main() -> None:
