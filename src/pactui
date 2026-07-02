@@ -38,7 +38,6 @@ import notes_db
 import pacman_log
 import preview_item
 
-
 # One Dark (Atom's default dark theme) — canonical palette, not an
 # approximation: background/foreground/accents match the original
 # atom/one-dark-syntax values used across onedark.vim and One Dark Pro.
@@ -48,12 +47,12 @@ ONE_DARK = Theme(
     background="#282c34",
     surface="#2c313a",
     panel="#21252b",
-    primary="#61afef",    # blue
+    primary="#61afef",  # blue
     secondary="#56b6c2",  # cyan
-    accent="#c678dd",     # purple
-    warning="#e5c07b",    # yellow
-    error="#e06c75",      # red
-    success="#98c379",    # green
+    accent="#c678dd",  # purple
+    warning="#e5c07b",  # yellow
+    error="#e06c75",  # red
+    success="#98c379",  # green
     foreground="#abb2bf",
 )
 
@@ -108,6 +107,83 @@ def _short_reason(reason: str) -> str:
     if reason == "Installed as a dependency for another package":
         return "dependency"
     return reason or ""
+
+
+# ---------------------------------------------------------------------------
+# Shared: the screen-indicator dot bar
+# ---------------------------------------------------------------------------
+# (screen_name, label, action name on the App) — one entry per screen, in
+# display order. Both screens' dot bars are built from this single list, so
+# adding a future third screen only means adding one entry here.
+SCREEN_TABS = [
+    ("overview", "Overview", "goto_overview"),
+    ("search", "Search", "goto_search"),
+]
+
+
+class ScreenDot(Static):
+    """A single clickable dot representing one screen.
+
+    Active = accent color (set via the 'active' CSS class), inactive = gray.
+    Clicking it calls the given App action directly — same action the
+    f1/f2 key bindings already use, so click and keyboard stay equivalent.
+    """
+
+    DEFAULT_CSS = """
+    ScreenDot {
+        width: auto;
+        height: 1;
+        padding: 0 1;
+        color: $foreground-darken-2;
+    }
+    ScreenDot:hover {
+        text-style: bold;
+    }
+    ScreenDot.active {
+        color: $accent;
+        text-style: bold;
+    }
+    """
+
+    def __init__(self, label: str, action_name: str) -> None:
+        super().__init__(f"\u25cf {label}")
+        self._action_name = action_name
+
+    def on_click(self) -> None:
+        getattr(self.app, f"action_{self._action_name}")()
+
+
+class ScreenTabs(Horizontal):
+    """The full dot bar: one ScreenDot per entry in SCREEN_TABS.
+
+    `current` is the screen_name (first element of a SCREEN_TABS tuple)
+    that should render as active; call `set_current` to update it after a
+    screen switch.
+    """
+
+    DEFAULT_CSS = """
+    ScreenTabs {
+        height: 1;
+        width: 100%;
+        align: center middle;
+        background: $panel;
+    }
+    """
+
+    def __init__(self, current: str) -> None:
+        super().__init__()
+        self._current = current
+
+    def compose(self) -> ComposeResult:
+        for screen_name, label, action_name in SCREEN_TABS:
+            dot = ScreenDot(label, action_name)
+            dot.set_class(screen_name == self._current, "active")
+            yield dot
+
+    def set_current(self, screen_name: str) -> None:
+        self._current = screen_name
+        for dot, (name, _, _) in zip(self.query(ScreenDot), SCREEN_TABS):
+            dot.set_class(name == screen_name, "active")
 
 
 class PackageSearchScreen(Screen):
@@ -216,6 +292,7 @@ class PackageSearchScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
+        yield ScreenTabs(current="search")
 
         with Horizontal(id="top-region"):
             with Vertical(id="left-pane"):
@@ -491,8 +568,9 @@ class OverviewScreen(Screen):
     TITLE = "Overview"
 
     CSS = """
-    Screen {
+    #overview-body {
         layout: horizontal;
+        height: 1fr;
     }
 
     #stats-pane {
@@ -523,7 +601,8 @@ class OverviewScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        with Horizontal():
+        yield ScreenTabs(current="overview")
+        with Horizontal(id="overview-body"):
             with Vertical(id="stats-pane"):
                 yield Tree("stats", id="stats-tree")
             with Vertical(id="log-pane"):
