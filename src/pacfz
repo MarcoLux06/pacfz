@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-# Find the Python modules either next to this script (running straight from a
-# git checkout, no install needed) or under /usr/share/pacfz (where the
-# PKGBUILD puts them once installed via `makepkg -si`).
 # Find the Python modules either in lib/ next to this script (running
 # straight from a git checkout, no install needed) or under
 # /usr/share/pacfz/lib (where the PKGBUILD puts them once installed via
@@ -64,6 +61,7 @@ show_usage() {
   echo "Other:"
   echo "  -h, --help          Show this help message"
   echo "  -r, --refresh       Refresh the package database"
+  echo "  --version           Show the pacfz version"
   echo ""
   echo "Inside the interactive picker:"
   echo "  ctrl-r              Rebuild the package cache and refresh the visible"
@@ -177,6 +175,10 @@ elif [[ $# -gt 0 ]]; then
       ;;
     -h|--help)
       show_usage
+      exit 0
+      ;;
+    --version)
+      python "$SCRIPT_LIST" --version
       exit 0
       ;;
     -r|--refresh)

@@ -12,6 +12,9 @@ without touching the user's real one:
 """
 import os
 
+# version tag
+__version__ = "1.0.5-dev"
+
 
 def _xdg(env_var: str, default: str) -> str:
     """Return $env_var if set, else the expanded default (e.g. ~/.cache)."""

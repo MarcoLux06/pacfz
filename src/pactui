@@ -42,6 +42,7 @@ import notes_db
 import pacman_log
 import preview_item
 
+
 # One Dark (Atom's default dark theme) — canonical palette, not an
 # approximation: background/foreground/accents match the original
 # atom/one-dark-syntax values used across onedark.vim and One Dark Pro.
@@ -51,12 +52,12 @@ ONE_DARK = Theme(
     background="#282c34",
     surface="#2c313a",
     panel="#21252b",
-    primary="#61afef",  # blue
+    primary="#61afef",    # blue
     secondary="#56b6c2",  # cyan
-    accent="#c678dd",  # purple
-    warning="#e5c07b",  # yellow
-    error="#e06c75",  # red
-    success="#98c379",  # green
+    accent="#c678dd",     # purple
+    warning="#e5c07b",    # yellow
+    error="#e06c75",      # red
+    success="#98c379",    # green
     foreground="#abb2bf",
 )
 
@@ -130,22 +131,22 @@ TRISTATE_FILTERS = [
     ("foreign", "foreign"),
     ("orphan", "orphan"),
     ("dependency", "deps"),
-    ("required_by_something", "notadep"),  # "Yes" == NOT(notadep)
+    ("required_by_something", "notadep"),   # "Yes" == NOT(notadep)
     ("optdep_for_something", "notoptdep"),  # "Yes" == NOT(notoptdep)
 ]
 
 
 @dataclass
 class FilterState:
-    foreign: str = "Any"  # one of TRISTATE_CHOICES
+    foreign: str = "Any"                    # one of TRISTATE_CHOICES
     orphan: str = "Any"
     dependency: str = "Any"
     required_by_something: str = "Any"
     optdep_for_something: str = "Any"
-    notes: str = "Any"  # one of NOTES_CHOICES
+    notes: str = "Any"                      # one of NOTES_CHOICES
     search_text: str = ""
-    search_field: str = "Name"  # real column name, e.g. "Licenses"
-    search_mode: str = "Substring"  # one of SEARCH_MODE_CHOICES
+    search_field: str = "Name"              # real column name, e.g. "Licenses"
+    search_mode: str = "Substring"          # one of SEARCH_MODE_CHOICES
 
 
 def filter_state_to_query_kwargs(state: FilterState):
@@ -294,7 +295,6 @@ class FilterPanel(Vertical):
 
     class Changed(Message):
         """Posted whenever any facet in the panel changes."""
-
         def __init__(self, panel: "FilterPanel") -> None:
             self.panel = panel
             super().__init__()
@@ -804,4 +804,8 @@ class PacTUIApp(App):
 
 
 if __name__ == "__main__":
+    if "--version" in sys.argv[1:]:
+        import config
+        print(f"pacfz {config.__version__}")
+        sys.exit(0)
     PacTUIApp().run()

@@ -6,7 +6,7 @@ import sys
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Tuple
 
-from config import cache_db_path
+from config import __version__, cache_db_path
 from notes_db import get_packages_with_notes
 from preview_item import bytes_to_human
 
@@ -279,7 +279,7 @@ def _passes_notes_filter(name: str, notes_filter: Optional[str],
 
 
 def iter_rows(query: str, params=None, notes_filter: Optional[str] = None,
-              db_path: str = DB_PATH) -> Iterator[tuple]:
+             db_path: str = DB_PATH) -> Iterator[tuple]:
     """Yield full result rows from ``query``, applying the notes filter.
 
     Assumes the first selected column is Name (the notes filter keys off
@@ -388,6 +388,10 @@ def main() -> None:
         usage=argparse.SUPPRESS,
         description="Query pacman package database with flexible filtering and sorting",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    parser.add_argument(
+        "--version", action="version", version=f"pacfz {__version__}",
     )
 
     parser.add_argument("-m", "--foreign", action="store_true", help="only foreign packages")
