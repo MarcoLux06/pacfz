@@ -73,9 +73,9 @@ show_usage() {
 }
 
 show_total() {
-  YELLOW=$'\033[33m'
-  echo "total package Size:$YELLOW"
-  python "$SCRIPT_LIST" "--totalsize"
+  GREEN=$'\033[32m'
+  echo "selected package size:$GREEN"
+  python "$SCRIPT_LIST" "${PYTHON_ARGS[@]}"
 }
 
 show_interactive() {
@@ -136,18 +136,26 @@ create_database() {
 # ---------------------------------------------------------------------------
 EXACT_MATCH="false"
 SHOW_NOTES="true"
+SHOW_TOTAL="false"
 PYTHON_ARGS=()
 
-# First pass: detect bash-only flags regardless of position.
+# First pass: detect bash-only flags regardless of position. -t/--totalsize
+# is checked here too (not just via `case $1` below) because it can appear
+# anywhere on the command line, e.g. `pacfz -e -t` — with only `$1` being
+# inspected, that combination used to fall through to the interactive
+# picker instead of printing the total, since -e (not -t) was in position 1.
 for arg in "$@"; do
   case "$arg" in
     --exact)      EXACT_MATCH="true"  ;;
     --hide-notes) SHOW_NOTES="false"  ;;
+    -t|--totalsize) SHOW_TOTAL="true" ;;
   esac
 done
 
 # Build the argument array forwarded to Python, stripping bash-only flags.
-# An array (not a string) preserves values containing spaces.
+# An array (not a string) preserves values containing spaces. -t/--totalsize
+# stays in PYTHON_ARGS (list_packages.py needs to see it to compute the
+# FILTERED total) — only --exact/--hide-notes are bash-only and stripped.
 for arg in "$@"; do
   if [[ "$arg" != "--exact" && "$arg" != "--hide-notes" ]]; then
     PYTHON_ARGS+=("$arg")
@@ -157,7 +165,10 @@ done
 # ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
-if [[ $# -gt 0 ]]; then
+if [[ "$SHOW_TOTAL" == "true" ]]; then
+  show_total
+  exit 0
+elif [[ $# -gt 0 ]]; then
   case $1 in
     -m|--foreign|-o|--orphans|-e|--explicit|-d|--deps|-s|--size|--sort-by|-n|--notadep|-k|--notoptdep|--asc|--desc|--has-note|--no-note|-f|--field|-a|--any|-x|--exact-match|-v|--invert)
       package_list=$(python "$SCRIPT_LIST" "${PYTHON_ARGS[@]}")
@@ -166,10 +177,6 @@ if [[ $# -gt 0 ]]; then
       ;;
     -h|--help)
       show_usage
-      exit 0
-      ;;
-    -t|--totalsize)
-      show_total
       exit 0
       ;;
     -r|--refresh)

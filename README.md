@@ -1,15 +1,72 @@
 # pacfz
 
-Deeper inspection of your installed Arch Linux packages. `pacfz` snapshots
-`pacman -Qi` / `pacman -Qqm` into a small SQLite cache and gives you two
-front-ends over it:
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<!-- TODO: once published to the AUR, add a version badge here, e.g.
+     https://img.shields.io/aur/version/pacfz -->
 
-- **`pacfz`** - an interactive [fzf](https://github.com/junegunn/fzf) picker
-  with a rich, colorized preview pane.
+**A fast, flexible explorer for your installed Arch Linux packages** - with
+rich previews, powerful filtering, and per-package notes, built on top of
+[fzf](https://github.com/junegunn/fzf).
+
+<!-- TODO: demo.gif goes here — a quick pacfz session: launch, fuzzy-search,
+     preview pane scrolling through package info, maybe an -v invert example.
+     Suggested: asciinema or a short terminal-recording GIF, ~15-30s. -->
+<!-- ![pacfz demo](demo.gif) -->
+
+`pacfz` snapshots `pacman -Qi` / `pacman -Qqm` into a small SQLite cache and
+queries it through two front-ends:
+
+- **`pacfz`** - an interactive fzf picker with a rich, colorized preview pane.
 - **`pacq`** - the same query engine, non-interactive, one package name per
   line. Pipe it into anything.
 
-Plus per-package **notes**, attached to a package and shown in the preview.
+Both share one flag set, so anything you can filter for interactively you
+can also script.
+
+## Features
+
+**Filtering**
+Narrow the package list by install reason (explicit / dependency), foreign
+(AUR/non-repo) status, orphan status, and dependency relationships (not
+required by anything, not an optional dependency for anything). Filters
+combine - stack as many as you like.
+
+**Field & free-text search**
+Search any field with substring or exact matching (`-f`/`-a`/`-x`), and
+invert results - either the whole query at once, or just one specific
+filter while leaving the rest untouched (see [Inverting](#inverting--v---invert)
+below).
+
+**Sorting**
+Sort by any field, ascending or descending; a bare size-sort is one flag
+away.
+
+**Notes**
+Attach a free-text note to any package - handy for "built from source,
+don't touch," AUR-vs-repo reminders, or anything else worth remembering
+about a specific install. Notes show up right in the preview pane.
+
+**Live, self-refreshing cache**
+The package cache builds itself on first run and rebuilds atomically (built
+to a temp file, then swapped in - never a half-written read). Refresh it
+anytime with `pacfz -r`, or from inside the picker with **ctrl-r**, without
+leaving fzf.
+
+**Total size, filtered**
+`-t` reports the installed size of exactly the packages your other filters
+selected - not the whole system.
+
+For the full flag reference, run `pacfz -h` / `pacq -h`, or see
+[Usage](#usage) below.
+
+### `pactui` (experimental)
+
+A third, TUI front-end is in development - built with
+[Textual](https://github.com/Textualize/textual), sharing the exact same
+query engine as `pacfz`/`pacq`. It adds an overview screen (package stats,
+pacman log) alongside a mouse-and-keyboard-driven search view. Not yet
+packaged or documented for general use; try it straight from a checkout with
+`python3 src/pactui` if you're curious, but expect rough edges.
 
 ## Requirements
 
@@ -31,7 +88,7 @@ below. If you'd rather not use `make`, run
 This builds and installs `pacfz` as a normal pacman package:
 
 | What                      | Where                       |
-| ------------------------- | --------------------------- |
+|---------------------------|-----------------------------|
 | `pacfz`, `pacq` launchers | `/usr/bin`                  |
 | Python modules            | `/usr/share/pacfz`          |
 | License                   | `/usr/share/licenses/pacfz` |
@@ -79,7 +136,7 @@ source build.env && makepkg -si
 ```
 
 This only affects the shell session you run it in. If you'd rather have
-_every_ `makepkg` build on your machine redirect to a `build/` next to
+*every* `makepkg` build on your machine redirect to a `build/` next to
 wherever you run it - not just this project - set the same five variables
 in `~/.makepkg.conf` instead; that applies automatically with no per-build
 step, but affects every package you build, not just this one.
@@ -154,27 +211,17 @@ pacfz -m                     # browse foreign packages interactively
 
 ### Inverting: `-v` / `--invert`
 
-This is the one piece worth reading carefully, because bare `-v` and
-`-v FILTER` do deliberately different things.
-
-**Bare `-v`** inverts _everything else you asked for_, as a single unit, last:
+Bare `-v` inverts *everything else you asked for*, as a single unit. `-v
+FILTER` inverts *only that one named filter*, leaving every other active
+filter in place as a precondition - and it's repeatable.
 
 ```sh
 pacq -m -v                   # NOT foreign
-pacq -f Name python -v       # packages whose name does NOT contain "python"
-```
-
-**`-v FILTER`** inverts _only that one named filter_ and leaves your other
-filters in place as preconditions. It's repeatable, and the named filters are
-AND-ed together inside the negation:
-
-```sh
-# explicit packages that are NOT(orphans):
-pacq -e -v orphan
-
-# explicit packages where NOT(notadep AND notoptdep) -
-# i.e. explicit packages that ARE required by something, optionally or not:
+pacq -e -v orphan            # explicit packages that are NOT orphans
 pacq -e -v notadep -v notoptdep
+                              # explicit packages where NOT(notadep AND notoptdep) -
+                              # i.e. explicit packages that ARE required by
+                              # something, optionally or not
 ```
 
 `FILTER` is one of `foreign`, `orphan`, `explicit`, `deps`, `notadep`,
@@ -187,10 +234,10 @@ them (the notes DB isn't even opened in that case).
 
 ## A note on "orphan"
 
-Here, **orphan** means: installed as a dependency _and_ now required by
+Here, **orphan** means: installed as a dependency *and* now required by
 nothing (`Install Reason = dependency AND Required By = None`) - the usual
-`pacman -Qdt` sense. It does **not** consider _optional_-dependency
-relationships, so a package that is only an _optional_ dependency of something
+`pacman -Qdt` sense. It does **not** consider *optional*-dependency
+relationships, so a package that is only an *optional* dependency of something
 still counts as an orphan. If you want to exclude things that are an optional
 dependency for something, combine filters, e.g. `pacq -o -k` (orphans that are
 also not an optional dependency for anything).
@@ -198,7 +245,7 @@ also not an optional dependency for anything).
 ## Where your files live
 
 | File             | Default location                    | Override              |
-| ---------------- | ----------------------------------- | --------------------- |
+|------------------|-------------------------------------|-----------------------|
 | Package cache DB | `~/.cache/pacman_packages.db`       | `PACFZ_DB_PATH`       |
 | Notes DB         | `~/.local/share/pacfz/user_data.db` | `PACFZ_NOTES_DB_PATH` |
 
@@ -220,3 +267,7 @@ run these.
 sudo pacman -S python-pytest   # one-time, not installed as a dependency
 make test
 ```
+
+## License
+
+MIT - see [LICENSE](LICENSE).
