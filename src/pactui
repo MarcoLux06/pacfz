@@ -11,6 +11,7 @@ Prototype scope: just the package overview screen (search + facet filters
 """
 import os
 import sys
+import time
 
 # Resolve the sibling lib/ directory the same way the bash launchers do:
 # next to this script in a dev checkout, or /usr/share/pacfz/lib once
@@ -21,11 +22,14 @@ if not os.path.isfile(os.path.join(_LIB_DIR, 'list_packages.py')):
     _LIB_DIR = '/usr/share/pacfz/lib'
 sys.path.insert(0, _LIB_DIR)
 
-from typing import Optional
+from dataclasses import dataclass, field as dataclass_field
+from typing import List, Optional, Tuple
 
 from rich.text import Text
+from textual import work
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
+from textual.message import Message
 from textual.screen import Screen
 from textual.theme import Theme
 from textual.widgets import (
@@ -84,22 +88,6 @@ class VimDataTable(DataTable):
     ]
 
 
-def _fuzzy_match(needle: str, haystack: str) -> bool:
-    """True if every character of `needle` appears in `haystack`, in order,
-    possibly with gaps — the same subsequence test fzf's default (non
-    --exact) matching is built on. Case-insensitive, matching fzf's default.
-    """
-    needle = needle.lower()
-    haystack = haystack.lower()
-    pos = 0
-    for ch in needle:
-        pos = haystack.find(ch, pos)
-        if pos == -1:
-            return False
-        pos += 1
-    return True
-
-
 def _short_reason(reason: str) -> str:
     """Compact the verbose Install_Reason string for the table column."""
     if reason == "Explicitly installed":
@@ -107,6 +95,104 @@ def _short_reason(reason: str) -> str:
     if reason == "Installed as a dependency for another package":
         return "dependency"
     return reason or ""
+
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Shared: filter state + query translation ("unified backend" for filtering)
+# ---------------------------------------------------------------------------
+# FilterState is a plain data container — no widget references, no I/O. Each
+# screen that shows a filter panel owns and creates its own independent
+# instance; nothing here is global or shared across screens. Two screens
+# each showing a FilterPanel will each have their own separate FilterState,
+# and changing one never affects the other.
+#
+# filter_state_to_query_kwargs() is the one place the *meaning* of a filter
+# combination is translated into build_query() kwargs — reusable by anything
+# that needs "the currently selected filters" as a query, e.g. a future
+# per-filter storage-size calculator, not just this screen's own table.
+#
+# Every relationship filter (foreign, orphan, dependency, required-by-
+# something, optional-dep-for-something) is three-state: Any / Yes / No.
+# This subsumes the CLI's -v/--invert entirely within the TUI — "No" for a
+# filter IS the inverted case, expressed directly rather than as a separate
+# invert step. Any = don't care (omit the clause), Yes = require it, No =
+# require its negation.
+TRISTATE_CHOICES = ("Any", "Yes", "No")
+NOTES_CHOICES = ("Any", "Has note", "No note")
+SEARCH_MODE_CHOICES = ("Substring", "Exact")
+
+# (state field name, WHERE_CLAUSES key) for every tri-state relationship
+# filter. "Yes"/"No" become preconditions or scoped inverts via
+# build_query()'s invert_clauses, so each filter's negation is independent
+# of every other filter — unlike bare -v, which inverts everything at once.
+TRISTATE_FILTERS = [
+    ("foreign", "foreign"),
+    ("orphan", "orphan"),
+    ("dependency", "deps"),
+    ("required_by_something", "notadep"),  # "Yes" == NOT(notadep)
+    ("optdep_for_something", "notoptdep"),  # "Yes" == NOT(notoptdep)
+]
+
+
+@dataclass
+class FilterState:
+    foreign: str = "Any"  # one of TRISTATE_CHOICES
+    orphan: str = "Any"
+    dependency: str = "Any"
+    required_by_something: str = "Any"
+    optdep_for_something: str = "Any"
+    notes: str = "Any"  # one of NOTES_CHOICES
+    search_text: str = ""
+    search_field: str = "Name"  # real column name, e.g. "Licenses"
+    search_mode: str = "Substring"  # one of SEARCH_MODE_CHOICES
+
+
+def filter_state_to_query_kwargs(state: FilterState):
+    """Translate a FilterState into (build_query kwargs, notes_filter).
+
+    Pure -- no widget access, no I/O. This is the single place that knows
+    what each filter *means* in query terms, so every consumer (this
+    screen's table, a future size calculator, anything else) computes
+    identical results for the same FilterState.
+    """
+    where_clauses = []
+    invert_each = []
+
+    for state_attr, clause_key in TRISTATE_FILTERS:
+        choice = getattr(state, state_attr)
+        is_inverted_concept = state_attr in (
+            "required_by_something", "optdep_for_something"
+        )
+        if choice == "Yes":
+            # required_by_something/optdep_for_something are themselves the
+            # NEGATION of their underlying clause (notadep/notoptdep mean
+            # "not required by anything") -- so "Yes, it IS required by
+            # something" is NOT(notadep). Both cases end up in invert_each.
+            (invert_each if is_inverted_concept else where_clauses).append(clause_key)
+        elif choice == "No":
+            (where_clauses if is_inverted_concept else invert_each).append(clause_key)
+        # "Any" -> omit entirely, neither list
+
+    field_searches = []
+    search_text = state.search_text.strip()
+    if search_text:
+        field_searches.append((state.search_field, search_text))
+
+    notes_filter = None
+    if state.notes == "Has note":
+        notes_filter = "has_note"
+    elif state.notes == "No note":
+        notes_filter = "no_note"
+
+    query_kwargs = dict(
+        where_clauses=where_clauses or None,
+        invert_each=invert_each or None,
+        field_searches=field_searches or None,
+        exact_match=(state.search_mode == "Exact"),
+        select_cols=SELECT_COLS,
+    )
+    return query_kwargs, notes_filter
 
 
 # ---------------------------------------------------------------------------
@@ -186,13 +272,189 @@ class ScreenTabs(Horizontal):
             dot.set_class(name == screen_name, "active")
 
 
+class FilterPanel(Vertical):
+    """Self-contained filter facet panel: owns one independent FilterState.
+
+    Each FilterPanel instance has its own state — nothing here is shared
+    across screens or instances. A screen embeds a FilterPanel, listens for
+    FilterPanel.Changed, and reads `panel.state` (a FilterState) whenever it
+    wants to know the current filters — including for reuse in *other*
+    features later (e.g. a size calculator), by using filter_state_to_query_
+    kwargs() on that same FilterState.
+
+    `orientation` is fixed at construction time ("horizontal" or "vertical")
+    — a static per-call-site choice, not a runtime-toggleable setting.
+
+    The main free-text search box is deliberately NOT part of this panel —
+    it lives in the containing screen (the "main search bar"), and the
+    screen forwards its value in via set_search_text(). The panel only owns
+    the *field* (which column to search) and *mode* (substring/exact)
+    dropdown/radio that govern how that text is interpreted.
+    """
+
+    class Changed(Message):
+        """Posted whenever any facet in the panel changes."""
+
+        def __init__(self, panel: "FilterPanel") -> None:
+            self.panel = panel
+            super().__init__()
+
+    DEFAULT_CSS = """
+    FilterPanel {
+        height: auto;
+        max-height: 16;
+        width: 100%;
+        border-top: solid $accent;
+        padding: 0 1;
+    }
+
+    FilterPanel.horizontal > #facet-row {
+        layout: horizontal;
+        height: auto;
+        width: 100%;
+    }
+
+    /* Tight spacing between groups, with a left border as the visual
+       separator instead of wide margins — keeps the panel compact while
+       each group is still clearly delineated. */
+    FilterPanel.horizontal > #facet-row > .tristate-group {
+        width: auto;
+        height: auto;
+        padding: 0 1;
+        border-left: solid $panel-lighten-2;
+    }
+    FilterPanel.horizontal > #facet-row > .tristate-group:first-of-type {
+        border-left: none;
+        padding-left: 0;
+    }
+
+    FilterPanel.vertical > #facet-row {
+        layout: vertical;
+        height: auto;
+    }
+
+    FilterPanel.vertical > #facet-row > .tristate-group {
+        width: 100%;
+        height: auto;
+        padding: 0 0 0 1;
+        border-left: solid $panel-lighten-2;
+        margin-bottom: 1;
+    }
+
+    /* RadioSet's `width: auto` does not reliably constrain its rendered
+       size — give it an explicit fixed width instead, wide enough for the
+       longest label plus the radio marker. */
+    FilterPanel RadioSet {
+        width: 28;
+        height: auto;
+    }
+
+    FilterPanel .facet-label {
+        color: $accent;
+        text-style: bold;
+    }
+
+    FilterPanel Select {
+        width: 26;
+    }
+    """
+
+    def __init__(self, orientation: str = "horizontal", id: Optional[str] = None) -> None:
+        assert orientation in ("horizontal", "vertical")
+        super().__init__(id=id)
+        self._orientation = orientation
+        self.add_class(orientation)
+        self.state = FilterState()
+
+    def compose(self) -> ComposeResult:
+        # HorizontalScroll/VerticalScroll auto-show a scrollbar only when
+        # content actually overflows, re-measured on every resize — this is
+        # what makes "scroll sideways if the screen is too narrow" work
+        # dynamically as the terminal is resized, with no manual scroll-
+        # position tracking needed.
+        row_container = HorizontalScroll if self._orientation == "horizontal" else VerticalScroll
+        with row_container(id="facet-row"):
+            with Vertical(classes="tristate-group"):
+                yield Static("Foreign", classes="facet-label")
+                with RadioSet(id="foreign-filter"):
+                    for choice in TRISTATE_CHOICES:
+                        yield RadioButton(choice, value=(choice == "Any"))
+            with Vertical(classes="tristate-group"):
+                yield Static("Orphan", classes="facet-label")
+                with RadioSet(id="orphan-filter"):
+                    for choice in TRISTATE_CHOICES:
+                        yield RadioButton(choice, value=(choice == "Any"))
+            with Vertical(classes="tristate-group"):
+                yield Static("Dependency", classes="facet-label")
+                with RadioSet(id="dependency-filter"):
+                    for choice in TRISTATE_CHOICES:
+                        yield RadioButton(choice, value=(choice == "Any"))
+            with Vertical(classes="tristate-group"):
+                yield Static("Req'd by something", classes="facet-label")
+                with RadioSet(id="required-by-filter"):
+                    for choice in TRISTATE_CHOICES:
+                        yield RadioButton(choice, value=(choice == "Any"))
+            with Vertical(classes="tristate-group"):
+                yield Static("Optional dep for something", classes="facet-label")
+                with RadioSet(id="optdep-for-filter"):
+                    for choice in TRISTATE_CHOICES:
+                        yield RadioButton(choice, value=(choice == "Any"))
+            with Vertical(classes="tristate-group"):
+                yield Static("Notes", classes="facet-label")
+                with RadioSet(id="notes-filter"):
+                    for choice in NOTES_CHOICES:
+                        yield RadioButton(choice, value=(choice == "Any"))
+            with Vertical(classes="tristate-group"):
+                yield Static("Search field", classes="facet-label")
+                yield Select([], id="field-select")
+                with RadioSet(id="search-mode"):
+                    for choice in SEARCH_MODE_CHOICES:
+                        yield RadioButton(choice, value=(choice == "Substring"))
+
+    def on_mount(self) -> None:
+        columns = lp.get_table_columns()
+        field_select = self.query_one("#field-select", Select)
+        field_select.set_options((col, col) for col in columns)
+        field_select.value = "Name"
+
+    def set_search_text(self, text: str) -> None:
+        """Called by the containing screen to forward its main search box's value."""
+        self.state.search_text = text
+
+    def _radio_label(self, selector: str) -> Optional[str]:
+        radio_set = self.query_one(selector, RadioSet)
+        if radio_set.pressed_button is None:
+            return None
+        return str(radio_set.pressed_button.label)
+
+    def _sync_state_from_widgets(self) -> None:
+        self.state.foreign = self._radio_label("#foreign-filter") or "Any"
+        self.state.orphan = self._radio_label("#orphan-filter") or "Any"
+        self.state.dependency = self._radio_label("#dependency-filter") or "Any"
+        self.state.required_by_something = self._radio_label("#required-by-filter") or "Any"
+        self.state.optdep_for_something = self._radio_label("#optdep-for-filter") or "Any"
+        self.state.notes = self._radio_label("#notes-filter") or "Any"
+        self.state.search_mode = self._radio_label("#search-mode") or "Substring"
+        field = self.query_one("#field-select", Select).value
+        if field is not Select.NULL:
+            self.state.search_field = str(field)
+
+    def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
+        self._sync_state_from_widgets()
+        self.post_message(self.Changed(self))
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        self._sync_state_from_widgets()
+        self.post_message(self.Changed(self))
+
+
 class PackageSearchScreen(Screen):
     """Screen 2: search + facet filters + table + preview.
 
     Layout: split top/bottom first. The top region is split left/right (40%
-    search+table, 60% preview). The bottom region is the filter panel,
-    spanning the full width to fit every filter dimension the CLI supports
-    (except -t/-v/-s/--asc/--desc, deferred for now).
+    search+table, 60% preview). The bottom region is a FilterPanel, laid out
+    horizontally and sized to its content (not a fixed max-height) so it's
+    only ever as tall as the filters actually need.
     """
 
     TITLE = "Search"
@@ -231,59 +493,14 @@ class PackageSearchScreen(Screen):
         height: auto;
     }
 
-    #filter-area {
+    #search-filter-panel {
         height: auto;
-        max-height: 16;
-        width: 100%;
-        border-top: solid $accent;
-        padding: 0 1;
-    }
-
-    #filter-row {
-        height: auto;
-        layout: horizontal;
-    }
-
-    #filter-row > Vertical {
-        width: auto;
-        margin-right: 3;
-    }
-
-    /* RadioSet defaults to width: 1fr internally, which would otherwise
-       force its parent Vertical (and everything after it in the row) to
-       expand and get crowded off-screen. Override it explicitly. */
-    /* RadioSet's `width: auto` does not reliably constrain its rendered
-       size (it reports the correct small content width via
-       get_content_width, but still renders expanded to fill available
-       space) — give it an explicit fixed width instead, wide enough for
-       the longest label ("Dependency") plus the radio marker. */
-    RadioSet {
-        width: 20;
-    }
-
-    #checkbox-group {
-        layout: grid;
-        grid-size: 2;
-        grid-gutter: 0 2;
-        width: auto;
-    }
-
-    .facet-label {
-        color: $accent;
-        text-style: bold;
-    }
-
-    #field-select {
-        width: 24;
-    }
-
-    #field-value {
-        width: 24;
     }
     """
 
     BINDINGS = [
         ("/", "focus_search", "Search"),
+        ("ctrl+r", "refresh_cache", "Refresh cache"),
     ]
 
     def __init__(self) -> None:
@@ -303,37 +520,7 @@ class PackageSearchScreen(Screen):
                 with VerticalScroll(id="preview-scroll"):
                     yield Static(id="preview-content")
 
-        with Vertical(id="filter-area"):
-            with Horizontal(id="filter-row"):
-                with Vertical():
-                    yield Static("Type", classes="facet-label")
-                    with RadioSet(id="reason-filter"):
-                        yield RadioButton("Any", value=True)
-                        yield RadioButton("Explicit")
-                        yield RadioButton("Dependency")
-                with Vertical():
-                    yield Static("Notes", classes="facet-label")
-                    with RadioSet(id="notes-filter"):
-                        yield RadioButton("Any", value=True)
-                        yield RadioButton("Has note")
-                        yield RadioButton("No note")
-                with Vertical(id="checkbox-group"):
-                    yield Checkbox("Foreign", id="cb-foreign")
-                    yield Checkbox("Orphan", id="cb-orphan")
-                    yield Checkbox("Not a dep", id="cb-notadep")
-                    yield Checkbox("Not opt-dep", id="cb-notoptdep")
-                with Vertical():
-                    yield Static("Search", classes="facet-label")
-                    yield Checkbox("All fields (not just name)", id="cb-all-fields")
-                    with RadioSet(id="search-mode"):
-                        yield RadioButton("Substring", value=True)
-                        yield RadioButton("Exact")
-                        yield RadioButton("Fuzzy (fzf-style)")
-                with Vertical():
-                    yield Static("Field filter", classes="facet-label")
-                    yield Select([], id="field-select", prompt="(field)")
-                    yield Input(placeholder="value...", id="field-value")
-                    yield Checkbox("Exact match", id="cb-exact")
+        yield FilterPanel(orientation="horizontal", id="search-filter-panel")
 
         yield Footer()
 
@@ -344,96 +531,8 @@ class PackageSearchScreen(Screen):
         for header, width in COLUMNS:
             table.add_column(header, width=width, key=header)
 
-        # Field-search dropdown options come from the real schema, so
-        # whatever's selected always resolves cleanly in build_query().
-        columns = lp.get_table_columns()
-        field_select = self.query_one("#field-select", Select)
-        field_select.set_options(
-            (col.replace("_", " "), col.replace("_", " ")) for col in columns
-        )
-
         self.refresh_results()
         self.query_one("#search-input", Input).focus()
-
-    # ------------------------------------------------------------------
-    # Filter state -> query
-    # ------------------------------------------------------------------
-    def _search_mode(self) -> str:
-        label = self._radio_label("#search-mode")
-        if label == "Exact":
-            return "exact"
-        if label and label.startswith("Fuzzy"):
-            return "fuzzy"
-        return "substring"
-
-    def _build_query_kwargs(self) -> dict:
-        where_clauses = []
-        if self.query_one("#cb-foreign", Checkbox).value:
-            where_clauses.append("foreign")
-        if self.query_one("#cb-orphan", Checkbox).value:
-            where_clauses.append("orphan")
-        if self.query_one("#cb-notadep", Checkbox).value:
-            where_clauses.append("notadep")
-        if self.query_one("#cb-notoptdep", Checkbox).value:
-            where_clauses.append("notoptdep")
-
-        reason = self._radio_label("#reason-filter")
-        if reason == "Explicit":
-            where_clauses.append("explicit")
-        elif reason == "Dependency":
-            where_clauses.append("deps")
-
-        field_exact_match = self.query_one("#cb-exact", Checkbox).value
-
-        field_searches = []
-        any_field_searches = None
-
-        # Fuzzy mode can't be expressed as SQL (LIKE/= don't do subsequence
-        # matching) — its search term is deliberately left OUT of the query
-        # here and applied as a post-filter in refresh_results() instead.
-        search_mode = self._search_mode()
-        search_text = self.query_one("#search-input", Input).value.strip()
-        if search_text and search_mode != "fuzzy":
-            if self.query_one("#cb-all-fields", Checkbox).value:
-                any_field_searches = [search_text]
-            else:
-                field_searches.append(("Name", search_text))
-
-        field = self.query_one("#field-select", Select).value
-        value = self.query_one("#field-value", Input).value.strip()
-        if field is not Select.NULL and value:
-            field_searches.append((str(field), value))
-
-        # NOTE: exact_match is a single flag shared by build_query() across
-        # every field_searches/any_field_searches entry — so the search bar
-        # (substring/exact radio) and the Field filter's own Exact-match
-        # checkbox can't be set independently when BOTH are active at once.
-        # In practice this only matters if you use the search bar AND the
-        # field filter simultaneously with conflicting modes; the field
-        # filter's checkbox wins in that combination since it's OR'd in.
-        exact_match = field_exact_match or (search_mode == "exact")
-
-        return dict(
-            where_clauses=where_clauses or None,
-            any_field_searches=any_field_searches,
-            field_searches=field_searches or None,
-            exact_match=exact_match,
-            select_cols=SELECT_COLS,
-        )
-
-    def _radio_label(self, selector: str) -> Optional[str]:
-        radio_set = self.query_one(selector, RadioSet)
-        if radio_set.pressed_button is None:
-            return None
-        return str(radio_set.pressed_button.label)
-
-    def _notes_filter(self) -> Optional[str]:
-        label = self._radio_label("#notes-filter")
-        if label == "Has note":
-            return "has_note"
-        if label == "No note":
-            return "no_note"
-        return None
 
     # ------------------------------------------------------------------
     # Query execution
@@ -442,25 +541,16 @@ class PackageSearchScreen(Screen):
         table = self.query_one("#package-table", DataTable)
         table.clear()
 
+        panel = self.query_one("#search-filter-panel", FilterPanel)
+        panel.set_search_text(self.query_one("#search-input", Input).value)
+        query_kwargs, notes_filter = filter_state_to_query_kwargs(panel.state)
+
         try:
-            query, params = lp.build_query(**self._build_query_kwargs())
+            query, params = lp.build_query(**query_kwargs)
         except ValueError:
             return
 
-        notes_filter = self._notes_filter()
         rows = list(lp.iter_rows(query, params, notes_filter))
-
-        search_mode = self._search_mode()
-        search_text = self.query_one("#search-input", Input).value.strip()
-        if search_text and search_mode == "fuzzy":
-            all_fields = self.query_one("#cb-all-fields", Checkbox).value
-            if all_fields:
-                rows = [
-                    r for r in rows
-                    if any(_fuzzy_match(search_text, str(v)) for v in r if v is not None)
-                ]
-            else:
-                rows = [r for r in rows if _fuzzy_match(search_text, r[0])]
 
         for name, version, size, reason in rows:
             table.add_row(
@@ -494,7 +584,7 @@ class PackageSearchScreen(Screen):
     # Events
     # ------------------------------------------------------------------
     def on_input_changed(self, event: Input.Changed) -> None:
-        if event.input.id in ("search-input", "field-value"):
+        if event.input.id == "search-input":
             self.refresh_results()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -503,13 +593,7 @@ class PackageSearchScreen(Screen):
             if table.row_count:
                 table.focus()
 
-    def on_select_changed(self, event: Select.Changed) -> None:
-        self.refresh_results()
-
-    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
-        self.refresh_results()
-
-    def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
+    def on_filter_panel_changed(self, event: "FilterPanel.Changed") -> None:
         self.refresh_results()
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
@@ -519,7 +603,32 @@ class PackageSearchScreen(Screen):
     def action_focus_search(self) -> None:
         self.query_one("#search-input", Input).focus()
 
+    def action_refresh_cache(self) -> None:
+        self.app.notify("Refreshing package cache...", timeout=2)
+        self._rebuild_cache()
 
+    @work(thread=True, exclusive=True)
+    def _rebuild_cache(self) -> None:
+        # build_cache_db() shells out to create_db.py via subprocess.run(),
+        # which blocks — run it in a real thread (thread=True), not just an
+        # async task, so the UI stays responsive while pacman -Qi runs.
+        error = None
+        try:
+            lp.build_cache_db()
+        except Exception as e:
+            error = str(e)
+        self.app.call_from_thread(self._on_cache_refreshed, error)
+
+    def _on_cache_refreshed(self, error: Optional[str]) -> None:
+        if error:
+            self.app.notify(f"Cache refresh failed: {error}", severity="error", timeout=6)
+            return
+        self.app.notify(f"\u2713 cache refreshed at {time.strftime('%H:%M:%S')}", timeout=3)
+        self.refresh_results()
+
+
+# ---------------------------------------------------------------------------
+# Screen 1: Overview
 # ---------------------------------------------------------------------------
 # Screen 1: Overview
 # ---------------------------------------------------------------------------

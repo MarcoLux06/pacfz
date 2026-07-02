@@ -146,7 +146,7 @@ def _any_field_condition(valid_columns: List[str], value: str,
 def build_query(where_clauses=None, invert_clauses=None, invert_all=False,
                 field_searches=None, any_field_searches=None, exact_match=False,
                 sort_field=None, sort_direction=None, db_path=DB_PATH,
-                select_cols='"Name"', include_order=True):
+                select_cols='"Name"', include_order=True, invert_each=None):
     """Build a dynamic SQL query and its bound parameters.
 
     The model: a set of "precondition" conditions are always AND'd together
@@ -157,7 +157,16 @@ def build_query(where_clauses=None, invert_clauses=None, invert_all=False,
     Args:
         where_clauses: WHERE_CLAUSES keys applied as preconditions.
         invert_clauses: WHERE_CLAUSES keys AND'd together then negated as a
-            group (what `-v FILTER` builds). Mutually exclusive with invert_all.
+            SINGLE group (what `-v FILTER -v FILTER2` builds: NOT(A AND B),
+            not NOT(A) AND NOT(B)). Mutually exclusive with invert_all.
+        invert_each: WHERE_CLAUSES keys each negated INDEPENDENTLY — every
+            entry becomes its own NOT(...), AND'd with everything else.
+            Distinct from invert_clauses: invert_each with ['a', 'b'] gives
+            NOT(a) AND NOT(b), not NOT(a AND b). This is what independent
+            tri-state (Any/Yes/No) filters need — e.g. a TUI facet panel
+            where each filter's "No" must stand on its own regardless of
+            what any other filter is doing. Combinable with where_clauses
+            and invert_clauses in the same call.
         invert_all: bare `-v`. Moves where_clauses, field_searches and
             any_field_searches into one group that is AND'd and negated as a
             whole. Mutually exclusive with invert_clauses.
@@ -239,6 +248,9 @@ def build_query(where_clauses=None, invert_clauses=None, invert_all=False,
     query = f'SELECT {select_cols} FROM {TABLE_NAME}'
 
     all_clauses = list(base_conditions)
+    for key in (invert_each or []):
+        if key in WHERE_CLAUSES:
+            all_clauses.append(f'NOT ({WHERE_CLAUSES[key]})')
     if invert_group:
         all_clauses.append('NOT (' + ' AND '.join(invert_group) + ')')
     if all_clauses:
@@ -267,7 +279,7 @@ def _passes_notes_filter(name: str, notes_filter: Optional[str],
 
 
 def iter_rows(query: str, params=None, notes_filter: Optional[str] = None,
-             db_path: str = DB_PATH) -> Iterator[tuple]:
+              db_path: str = DB_PATH) -> Iterator[tuple]:
     """Yield full result rows from ``query``, applying the notes filter.
 
     Assumes the first selected column is Name (the notes filter keys off
