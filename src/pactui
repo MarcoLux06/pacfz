@@ -27,7 +27,8 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
-    Checkbox, DataTable, Footer, Header, Input, RadioButton, RadioSet, Static,
+    Checkbox, DataTable, Footer, Header, Input, RadioButton, RadioSet, Select,
+    Static,
 )
 
 import list_packages as lp
@@ -56,11 +57,22 @@ def _short_reason(reason: str) -> str:
 
 
 class PackageOverview(App):
-    """The package-overview screen: search/filters on the left, preview on the right."""
+    """The package-overview screen.
+
+    Layout: split top/bottom first. The top region is split left/right (40%
+    search+table, 60% preview) — same as before. The bottom region is the
+    filter panel, now spanning the full width to fit every filter dimension
+    the CLI supports (except -t/-v/-s/--asc/--desc, deferred for now).
+    """
 
     CSS = """
     Screen {
+        layout: vertical;
+    }
+
+    #top-region {
         layout: horizontal;
+        height: 1fr;
     }
 
     #left-pane {
@@ -68,35 +80,8 @@ class PackageOverview(App):
         height: 100%;
     }
 
-    #search-area {
-        height: 1fr;
-    }
-
     #package-table {
         height: 1fr;
-    }
-
-    #filter-area {
-        height: auto;
-        max-height: 9;
-        border-top: solid $accent;
-        padding: 0 1;
-    }
-
-    #filter-row {
-        height: auto;
-    }
-
-    #filter-row > Vertical {
-        width: auto;
-        margin-right: 2;
-    }
-
-    #checkbox-group {
-        layout: grid;
-        grid-size: 2;
-        grid-gutter: 0 2;
-        width: auto;
     }
 
     #preview-pane {
@@ -108,6 +93,44 @@ class PackageOverview(App):
 
     #preview-content {
         height: 1fr;
+    }
+
+    #filter-area {
+        height: auto;
+        max-height: 16;
+        width: 100%;
+        border-top: solid $accent;
+        padding: 0 1;
+    }
+
+    #filter-row {
+        height: auto;
+        layout: horizontal;
+    }
+
+    #filter-row > Vertical {
+        width: auto;
+        margin-right: 3;
+    }
+
+    #checkbox-group {
+        layout: grid;
+        grid-size: 2;
+        grid-gutter: 0 2;
+        width: auto;
+    }
+
+    .facet-label {
+        color: $accent;
+        text-style: bold;
+    }
+
+    #field-select {
+        width: 24;
+    }
+
+    #field-value {
+        width: 24;
     }
     """
 
@@ -123,42 +146,56 @@ class PackageOverview(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
 
-        with Horizontal():
+        with Horizontal(id="top-region"):
             with Vertical(id="left-pane"):
-                with Vertical(id="search-area"):
-                    yield Input(placeholder="Search by name...", id="search-input")
-                    yield DataTable(id="package-table", cursor_type="row")
-
-                with Vertical(id="filter-area"):
-                    with Horizontal(id="filter-row"):
-                        with Vertical():
-                            yield Static("Type", classes="facet-label")
-                            with RadioSet(id="reason-filter"):
-                                yield RadioButton("Any", value=True)
-                                yield RadioButton("Explicit")
-                                yield RadioButton("Dependency")
-                        with Vertical():
-                            yield Static("Notes", classes="facet-label")
-                            with RadioSet(id="notes-filter"):
-                                yield RadioButton("Any", value=True)
-                                yield RadioButton("Has note")
-                                yield RadioButton("No note")
-                        with Vertical(id="checkbox-group"):
-                            yield Checkbox("Foreign", id="cb-foreign")
-                            yield Checkbox("Orphan", id="cb-orphan")
-                            yield Checkbox("Not a dep", id="cb-notadep")
-                            yield Checkbox("Not opt-dep", id="cb-notoptdep")
+                yield Input(placeholder="Search any field...", id="search-input")
+                yield DataTable(id="package-table", cursor_type="row")
 
             with Vertical(id="preview-pane"):
                 yield Static(id="preview-content")
+
+        with Vertical(id="filter-area"):
+            with Horizontal(id="filter-row"):
+                with Vertical():
+                    yield Static("Type", classes="facet-label")
+                    with RadioSet(id="reason-filter"):
+                        yield RadioButton("Any", value=True)
+                        yield RadioButton("Explicit")
+                        yield RadioButton("Dependency")
+                with Vertical():
+                    yield Static("Notes", classes="facet-label")
+                    with RadioSet(id="notes-filter"):
+                        yield RadioButton("Any", value=True)
+                        yield RadioButton("Has note")
+                        yield RadioButton("No note")
+                with Vertical(id="checkbox-group"):
+                    yield Checkbox("Foreign", id="cb-foreign")
+                    yield Checkbox("Orphan", id="cb-orphan")
+                    yield Checkbox("Not a dep", id="cb-notadep")
+                    yield Checkbox("Not opt-dep", id="cb-notoptdep")
+                with Vertical():
+                    yield Static("Field search", classes="facet-label")
+                    yield Select([], id="field-select", prompt="(field)")
+                    yield Input(placeholder="value...", id="field-value")
+                    yield Checkbox("Exact match", id="cb-exact")
 
         yield Footer()
 
     def on_mount(self) -> None:
         lp.ensure_cache_db()
+
         table = self.query_one("#package-table", DataTable)
         for header, width in COLUMNS:
             table.add_column(header, width=width, key=header)
+
+        # Field-search dropdown options come from the real schema, so
+        # whatever's selected always resolves cleanly in build_query().
+        columns = lp.get_table_columns()
+        field_select = self.query_one("#field-select", Select)
+        field_select.set_options(
+            (col.replace("_", " "), col.replace("_", " ")) for col in columns
+        )
+
         self.refresh_results()
         self.query_one("#search-input", Input).focus()
 
@@ -182,12 +219,22 @@ class PackageOverview(App):
         elif reason == "Dependency":
             where_clauses.append("deps")
 
+        exact_match = self.query_one("#cb-exact", Checkbox).value
+
         search_text = self.query_one("#search-input", Input).value.strip()
-        field_searches = [("Name", search_text)] if search_text else None
+        any_field_searches = [search_text] if search_text else None
+
+        field_searches = None
+        field = self.query_one("#field-select", Select).value
+        value = self.query_one("#field-value", Input).value.strip()
+        if field is not Select.NULL and value:
+            field_searches = [(str(field), value)]
 
         return dict(
             where_clauses=where_clauses or None,
+            any_field_searches=any_field_searches,
             field_searches=field_searches,
+            exact_match=exact_match,
             select_cols=SELECT_COLS,
         )
 
@@ -252,8 +299,11 @@ class PackageOverview(App):
     # Events
     # ------------------------------------------------------------------
     def on_input_changed(self, event: Input.Changed) -> None:
-        if event.input.id == "search-input":
+        if event.input.id in ("search-input", "field-value"):
             self.refresh_results()
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        self.refresh_results()
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         self.refresh_results()
