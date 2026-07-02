@@ -25,7 +25,8 @@ from typing import Optional
 
 from rich.text import Text
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.theme import Theme
 from textual.widgets import (
     Checkbox, DataTable, Footer, Header, Input, RadioButton, RadioSet, Select,
     Static,
@@ -35,6 +36,23 @@ import list_packages as lp
 import notes_db
 import preview_item
 
+# One Dark (Atom's default dark theme) — canonical palette, not an
+# approximation: background/foreground/accents match the original
+# atom/one-dark-syntax values used across onedark.vim and One Dark Pro.
+ONE_DARK = Theme(
+    name="one-dark",
+    dark=True,
+    background="#282c34",
+    surface="#2c313a",
+    panel="#21252b",
+    primary="#61afef",  # blue
+    secondary="#56b6c2",  # cyan
+    accent="#c678dd",  # purple
+    warning="#e5c07b",  # yellow
+    error="#e06c75",  # red
+    success="#98c379",  # green
+    foreground="#abb2bf",
+)
 
 SELECT_COLS = '"Name", "Version", "Installed_Size", "Install_Reason"'
 
@@ -45,6 +63,39 @@ COLUMNS = [
     ("Size", 10),
     ("Reason", 22),
 ]
+
+
+class VimDataTable(DataTable):
+    """DataTable with vim motions (j/k/g/G) layered on top of the arrow keys.
+
+    Reuses the widget's own cursor_up/cursor_down/scroll_top/scroll_bottom
+    actions rather than reimplementing movement — j/k/g/G are just
+    additional key bindings pointing at the same actions the arrow
+    keys/Home/End already trigger.
+    """
+
+    BINDINGS = [
+        ("j", "cursor_down", "Down"),
+        ("k", "cursor_up", "Up"),
+        ("g", "scroll_top", "Top"),
+        ("G", "scroll_bottom", "Bottom"),
+    ]
+
+
+def _fuzzy_match(needle: str, haystack: str) -> bool:
+    """True if every character of `needle` appears in `haystack`, in order,
+    possibly with gaps — the same subsequence test fzf's default (non
+    --exact) matching is built on. Case-insensitive, matching fzf's default.
+    """
+    needle = needle.lower()
+    haystack = haystack.lower()
+    pos = 0
+    for ch in needle:
+        pos = haystack.find(ch, pos)
+        if pos == -1:
+            return False
+        pos += 1
+    return True
 
 
 def _short_reason(reason: str) -> str:
@@ -91,8 +142,12 @@ class PackageOverview(App):
         padding: 0 1;
     }
 
-    #preview-content {
+    #preview-scroll {
         height: 1fr;
+    }
+
+    #preview-content {
+        height: auto;
     }
 
     #filter-area {
@@ -111,6 +166,18 @@ class PackageOverview(App):
     #filter-row > Vertical {
         width: auto;
         margin-right: 3;
+    }
+
+    /* RadioSet defaults to width: 1fr internally, which would otherwise
+       force its parent Vertical (and everything after it in the row) to
+       expand and get crowded off-screen. Override it explicitly. */
+    /* RadioSet's `width: auto` does not reliably constrain its rendered
+       size (it reports the correct small content width via
+       get_content_width, but still renders expanded to fill available
+       space) — give it an explicit fixed width instead, wide enough for
+       the longest label ("Dependency") plus the radio marker. */
+    RadioSet {
+        width: 20;
     }
 
     #checkbox-group {
@@ -148,11 +215,12 @@ class PackageOverview(App):
 
         with Horizontal(id="top-region"):
             with Vertical(id="left-pane"):
-                yield Input(placeholder="Search any field...", id="search-input")
-                yield DataTable(id="package-table", cursor_type="row")
+                yield Input(placeholder="Search by name...", id="search-input")
+                yield VimDataTable(id="package-table", cursor_type="row")
 
             with Vertical(id="preview-pane"):
-                yield Static(id="preview-content")
+                with VerticalScroll(id="preview-scroll"):
+                    yield Static(id="preview-content")
 
         with Vertical(id="filter-area"):
             with Horizontal(id="filter-row"):
@@ -174,7 +242,14 @@ class PackageOverview(App):
                     yield Checkbox("Not a dep", id="cb-notadep")
                     yield Checkbox("Not opt-dep", id="cb-notoptdep")
                 with Vertical():
-                    yield Static("Field search", classes="facet-label")
+                    yield Static("Search", classes="facet-label")
+                    yield Checkbox("All fields (not just name)", id="cb-all-fields")
+                    with RadioSet(id="search-mode"):
+                        yield RadioButton("Substring", value=True)
+                        yield RadioButton("Exact")
+                        yield RadioButton("Fuzzy (fzf-style)")
+                with Vertical():
+                    yield Static("Field filter", classes="facet-label")
                     yield Select([], id="field-select", prompt="(field)")
                     yield Input(placeholder="value...", id="field-value")
                     yield Checkbox("Exact match", id="cb-exact")
@@ -182,6 +257,9 @@ class PackageOverview(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.register_theme(ONE_DARK)
+        self.theme = "one-dark"
+
         lp.ensure_cache_db()
 
         table = self.query_one("#package-table", DataTable)
@@ -202,6 +280,14 @@ class PackageOverview(App):
     # ------------------------------------------------------------------
     # Filter state -> query
     # ------------------------------------------------------------------
+    def _search_mode(self) -> str:
+        label = self._radio_label("#search-mode")
+        if label == "Exact":
+            return "exact"
+        if label and label.startswith("Fuzzy"):
+            return "fuzzy"
+        return "substring"
+
     def _build_query_kwargs(self) -> dict:
         where_clauses = []
         if self.query_one("#cb-foreign", Checkbox).value:
@@ -219,21 +305,40 @@ class PackageOverview(App):
         elif reason == "Dependency":
             where_clauses.append("deps")
 
-        exact_match = self.query_one("#cb-exact", Checkbox).value
+        field_exact_match = self.query_one("#cb-exact", Checkbox).value
 
+        field_searches = []
+        any_field_searches = None
+
+        # Fuzzy mode can't be expressed as SQL (LIKE/= don't do subsequence
+        # matching) — its search term is deliberately left OUT of the query
+        # here and applied as a post-filter in refresh_results() instead.
+        search_mode = self._search_mode()
         search_text = self.query_one("#search-input", Input).value.strip()
-        any_field_searches = [search_text] if search_text else None
+        if search_text and search_mode != "fuzzy":
+            if self.query_one("#cb-all-fields", Checkbox).value:
+                any_field_searches = [search_text]
+            else:
+                field_searches.append(("Name", search_text))
 
-        field_searches = None
         field = self.query_one("#field-select", Select).value
         value = self.query_one("#field-value", Input).value.strip()
         if field is not Select.NULL and value:
-            field_searches = [(str(field), value)]
+            field_searches.append((str(field), value))
+
+        # NOTE: exact_match is a single flag shared by build_query() across
+        # every field_searches/any_field_searches entry — so the search bar
+        # (substring/exact radio) and the Field filter's own Exact-match
+        # checkbox can't be set independently when BOTH are active at once.
+        # In practice this only matters if you use the search bar AND the
+        # field filter simultaneously with conflicting modes; the field
+        # filter's checkbox wins in that combination since it's OR'd in.
+        exact_match = field_exact_match or (search_mode == "exact")
 
         return dict(
             where_clauses=where_clauses or None,
             any_field_searches=any_field_searches,
-            field_searches=field_searches,
+            field_searches=field_searches or None,
             exact_match=exact_match,
             select_cols=SELECT_COLS,
         )
@@ -266,6 +371,18 @@ class PackageOverview(App):
 
         notes_filter = self._notes_filter()
         rows = list(lp.iter_rows(query, params, notes_filter))
+
+        search_mode = self._search_mode()
+        search_text = self.query_one("#search-input", Input).value.strip()
+        if search_text and search_mode == "fuzzy":
+            all_fields = self.query_one("#cb-all-fields", Checkbox).value
+            if all_fields:
+                rows = [
+                    r for r in rows
+                    if any(_fuzzy_match(search_text, str(v)) for v in r if v is not None)
+                ]
+            else:
+                rows = [r for r in rows if _fuzzy_match(search_text, r[0])]
 
         for name, version, size, reason in rows:
             table.add_row(
@@ -301,6 +418,12 @@ class PackageOverview(App):
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id in ("search-input", "field-value"):
             self.refresh_results()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "search-input":
+            table = self.query_one("#package-table", DataTable)
+            if table.row_count:
+                table.focus()
 
     def on_select_changed(self, event: Select.Changed) -> None:
         self.refresh_results()

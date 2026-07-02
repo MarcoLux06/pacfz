@@ -11,7 +11,10 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv
 
 # Editors
 *.swp
 .idea
+pyproject.toml
+uv.lock
