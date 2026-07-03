@@ -12,4 +12,3 @@ __pycache__/
 .idea
 pyproject.toml
 uv.lock
-file.tmp

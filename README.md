@@ -104,8 +104,7 @@ with the time).
 ### Quick look without installing
 
 You can also just run `./src/pacfz` / `./src/pacq` straight from the
-downloaded folder - they look for their Python modules in the sibling `lib/`
-directory first, so no install step is required to try it out.
+downloaded folder.
 
 ### Uninstall
 
@@ -128,18 +127,11 @@ separate "upgrade" command needed.
 `make build`/`make install` source `build.env`, which redirects everything
 `makepkg` produces - the extracted source, the staged install tree, the
 final `.pkg.tar.zst`, logs - into `build/` (already gitignored) instead of
-the repo root. If you build with a bare `makepkg -si` instead, source that
-file first to get the same behavior:
+the repo root.
 
 ```sh
 source build.env && makepkg -si
 ```
-
-This only affects the shell session you run it in. If you'd rather have
-*every* `makepkg` build on your machine redirect to a `build/` next to
-wherever you run it - not just this project - set the same five variables
-in `~/.makepkg.conf` instead; that applies automatically with no per-build
-step, but affects every package you build, not just this one.
 
 ## Usage
 
@@ -229,8 +221,7 @@ pacq -e -v notadep -v notoptdep
 
 ### Notes
 
-Notes show up in the `pacfz` preview pane. Pass `--hide-notes` to suppress
-them (the notes DB isn't even opened in that case).
+Notes show up in the `pacfz` preview pane. Pass `--hide-notes` to suppress.
 
 ## A note on "orphan"
 
@@ -257,16 +248,6 @@ data the program created while running.
 The cache is rebuilt atomically (built in a temp file, then swapped into
 place), so a rebuild - including a ctrl-r refresh while the preview pane is
 reading - never exposes a half-written database.
-
-## Running the tests
-
-Optional, and separate from installing the package - `makepkg -si` doesn't
-run these.
-
-```sh
-sudo pacman -S python-pytest   # one-time, not installed as a dependency
-make test
-```
 
 ## License
 
