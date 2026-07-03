@@ -13,7 +13,7 @@ without touching the user's real one:
 import os
 
 # version tag
-__version__ = "1.0.5-dev"
+__version__ = "1.0.6"
 
 
 def _xdg(env_var: str, default: str) -> str:
