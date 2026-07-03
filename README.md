@@ -8,10 +8,9 @@
 rich previews, powerful filtering, and per-package notes, built on top of
 [fzf](https://github.com/junegunn/fzf).
 
-<!-- TODO: demo.gif goes here — a quick pacfz session: launch, fuzzy-search,
-     preview pane scrolling through package info, maybe an -v invert example.
-     Suggested: asciinema or a short terminal-recording GIF, ~15-30s. -->
-<!-- ![pacfz demo](demo.gif) -->
+<p align="center">
+  <img src="assets/demo.gif" alt="pacfz demo" width="700">
+</p>
 
 `pacfz` snapshots `pacman -Qi` / `pacman -Qqm` into a small SQLite cache and
 queries it through two front-ends:
