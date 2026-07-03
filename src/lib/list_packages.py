@@ -6,7 +6,7 @@ import sys
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Tuple
 
-from config import cache_db_path
+from config import __version__, cache_db_path
 from notes_db import get_packages_with_notes
 from preview_item import bytes_to_human
 
@@ -428,6 +428,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
+    parser.add_argument(
+        "--version", action="version", version=f"pacfz {__version__}",
+    )
     parser.add_argument(
         "--print-help", action="store_true", dest="print_help", help=argparse.SUPPRESS,
     )

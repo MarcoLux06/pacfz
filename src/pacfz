@@ -150,7 +150,7 @@ elif [[ $# -gt 0 ]]; then
       ;;
     --version)
       python "$SCRIPT_LIST" --version
-      exit 0
+      exit $?
       ;;
     -r|--refresh)
       create_database

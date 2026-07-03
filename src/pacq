@@ -25,6 +25,7 @@ show_usage() {
   echo ""
   echo "Other:"
   echo "  -h, --help          Show this help message"
+  echo "  --version           Show the pacfz version"
 }
 
 for arg in "$@"; do
