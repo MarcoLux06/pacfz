@@ -36,7 +36,7 @@ WHERE_CLAUSES = {
     'notoptdep': f"{OPT_REQUIRED_BY_FIELD} = 'None'",
 }
 
-# Maps every short letter / long spelling to its WHERE_CLAUSES key, for
+# Maps every short letter / long spelling to It's WHERE_CLAUSES key, for
 # resolving the -v/--invert FILTER argument.
 CANNED_FILTER_ALIASES = {
     'm': 'foreign', 'foreign': 'foreign',
@@ -79,7 +79,7 @@ def ensure_cache_db() -> None:
 # Name resolution helpers
 # ---------------------------------------------------------------------------
 def resolve_canned_filter_name(name: str) -> str:
-    """Resolve a -v/--invert FILTER argument to its WHERE_CLAUSES key.
+    """Resolve a -v/--invert FILTER argument to It's WHERE_CLAUSES key.
 
     Raises:
         ValueError: if the name doesn't match any canned filter.
@@ -383,11 +383,53 @@ def _scalar_count(where_clauses: Optional[List[str]], db_path: str) -> int:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+# The filter/sort/size flags below are shared verbatim between pacfz and
+# pacq's own --help text (pacfz additionally has bash-only flags like
+# --exact/--hide-notes/-D that live nowhere near argparse, so this block
+# covers only what both wrappers actually share). Printed via the hidden
+# --print-help flag so the wording lives in exactly one place.
+SHARED_HELP = """\
+Filter Options:
+  -m, --foreign       Show only foreign packages
+  -o, --orphans       Show only orphan packages
+  -e, --explicit      Show only explicitly installed packages
+  -d, --deps          Show only dependency packages
+  -n, --notadep       Not a dependency for anything
+  -k, --notoptdep     Not an optional dependency for anything
+  --has-note          Only packages that have a user note
+  --no-note           Only packages without a user note
+  -f, --field F V     Only packages where field F matches value V
+                      (repeatable, AND-combined; e.g. -f Name vim)
+  -a, --any V         Only packages where any field matches value V
+                      (repeatable, AND-combined with everything else)
+  -x, --exact-match   Use exact equality (instead of substring) for -f/-a
+  -v, --invert [F]    Bare -v inverts the entire result, applied last.
+                      -v FILTER (repeatable) inverts only that one canned
+                      filter, leaving every other active filter untouched
+                      (e.g. -e -v notadep -v notoptdep = explicit packages
+                      where NOT(notadep AND notoptdep)). FILTER is one of:
+                      foreign/orphan/explicit/deps/notadep/notoptdep or
+                      their short letters m/o/e/d/n/k
+
+Sort Options:
+  -s, --sort-by [F]   Sort by field F (default field: Name; bare -s means
+                      Installed_Size; --size also still works)
+  --asc               Sort ascending (applies to whichever field is sorted)
+  --desc              Sort descending (applies to whichever field is sorted)
+
+Size:
+  -t, --totalsize     Show total size of the (filtered) packages"""
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         usage=argparse.SUPPRESS,
         description="Query pacman package database with flexible filtering and sorting",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    parser.add_argument(
+        "--print-help", action="store_true", dest="print_help", help=argparse.SUPPRESS,
     )
 
     parser.add_argument("-m", "--foreign", action="store_true", help="only foreign packages")
@@ -433,6 +475,10 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    if args.print_help:
+        print(SHARED_HELP)
+        return
 
     ensure_cache_db()
 
