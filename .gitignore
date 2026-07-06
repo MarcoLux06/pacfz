@@ -12,3 +12,6 @@ __pycache__/
 .idea
 pyproject.toml
 uv.lock
+
+# for codeberg token
+/token.env

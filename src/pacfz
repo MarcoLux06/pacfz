@@ -52,6 +52,13 @@ show_total() {
 }
 
 show_interactive() {
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo "Error: fzf is not installed, but is required for the interactive picker." >&2
+    echo "Install it with: sudo pacman -S fzf" >&2
+    echo "(pacq works without fzf, if you just need non-interactive queries.)" >&2
+    exit 1
+  fi
+
   # When --hide-notes is passed, forward it so previewItem skips the notes DB.
   local notes_flag=""
   if [[ "$SHOW_NOTES" == "false" ]]; then
