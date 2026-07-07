@@ -60,6 +60,11 @@ show_total() {
 }
 
 show_interactive() {
+  if [[ -z "$package_list" ]]; then
+    echo "No packages found."
+    exit 0
+  fi
+
   if ! command -v fzf >/dev/null 2>&1; then
     echo "Error: fzf is not installed, but is required for the interactive picker." >&2
     echo "Install it with: sudo pacman -S fzf" >&2
