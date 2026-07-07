@@ -530,6 +530,10 @@ def main() -> None:
     parser.add_argument(
         "--print-help", action="store_true", dest="print_help", help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--no-description", action="store_true", dest="no_description",
+        help=argparse.SUPPRESS,
+    )
 
     parser.add_argument("-m", "--foreign", action="store_true", help="only foreign packages")
     parser.add_argument("-o", "--orphans", action="store_true", help="only orphan packages")
@@ -639,7 +643,8 @@ def main() -> None:
     try:
         if args.totalsize:
             total = compute_total_size(query_kwargs, notes_filter)
-            print(build_totalsize_description(args) + ":")
+            if not args.no_description:
+                print(build_totalsize_description(args) + ":")
             print(bytes_to_human(total))
             return
 

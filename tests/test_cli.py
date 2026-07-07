@@ -119,6 +119,19 @@ def test_total_size_with_notes_filter(lib_dir, cache_db):
     assert out[-1] == bytes_to_human(noted_size)
 
 
+def test_pacq_totalsize_has_no_description(project_root):
+    # pacq is the scriptable front-end — its -t output must be just the
+    # number, nothing else, unlike pacfz/the raw script's default of
+    # printing a descriptive sentence first.
+    pacq = os.path.join(str(project_root), 'src', 'pacq')
+    result = subprocess.run(
+        [pacq, '-e', '-t'], capture_output=True, text=True, env=os.environ.copy(),
+    )
+    assert result.returncode == 0, result.stderr
+    lines = [ln for ln in result.stdout.splitlines() if ln]
+    assert len(lines) == 1, f"expected exactly one line, got: {lines!r}"
+
+
 def test_totalsize_description_default(lib_dir):
     # No filters at all -> the plain generic fallback sentence.
     out = run_list(lib_dir, '-t')
