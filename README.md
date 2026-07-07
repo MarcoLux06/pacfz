@@ -173,9 +173,9 @@ leaving every other active filter in place as a precondition - and it's repeatab
 pacq -m -v                   # NOT foreign
 pacq -e -v orphan            # explicit packages that are NOT orphans
 pacq -e -v notadep -v notoptdep
-                              # explicit packages where NOT(notadep AND notoptdep) -
-                              # i.e. explicit packages that ARE required by
-                              # something, optionally or not
+                             # explicit packages where NOT(notadep AND notoptdep) -
+                             # i.e. explicit packages that ARE required by
+                             # something, optionally or not
 ```
 
 `FILTER` is one of `foreign`, `orphan`, `explicit`, `deps`, `notadep`,

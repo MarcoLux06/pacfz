@@ -101,8 +101,11 @@ def test_total_size_respects_filter(lib_dir, cache_db):
     out_foreign = run_list(lib_dir, '-t', '-m')
     out_all = run_list(lib_dir, '-t')
 
-    assert out_foreign == [bytes_to_human(foreign_total)]
-    assert out_all == [bytes_to_human(grand_total)]
+    # -t now prints a descriptive sentence first, then the number on its own
+    # line — check the number specifically (the last line), not the whole
+    # output, since the description text itself is covered by its own tests.
+    assert out_foreign[-1] == bytes_to_human(foreign_total)
+    assert out_all[-1] == bytes_to_human(grand_total)
     assert foreign_total < grand_total  # sanity: the filter actually narrowed
 
 
@@ -113,7 +116,36 @@ def test_total_size_with_notes_filter(lib_dir, cache_db):
         cache_db, "SELECT SUM(Installed_Size) FROM packages WHERE Name = 'lavat-git'"
     )
     out = run_list(lib_dir, '-t', '--has-note')
-    assert out == [bytes_to_human(noted_size)]
+    assert out[-1] == bytes_to_human(noted_size)
+
+
+def test_totalsize_description_default(lib_dir):
+    # No filters at all -> the plain generic fallback sentence.
+    out = run_list(lib_dir, '-t')
+    assert out[0] == "total package size:"
+
+
+def test_totalsize_description_single_filter(lib_dir):
+    out = run_list(lib_dir, '-m', '-t')
+    assert out[0] == "total size of foreign packages:"
+
+
+def test_totalsize_description_combines_filters(lib_dir):
+    # Order follows _describe_active_filters' own iteration order
+    # (foreign before explicit), not the order flags were passed on the
+    # command line.
+    out = run_list(lib_dir, '-e', '-m', '-t')
+    assert out[0] == "total size of foreign, explicitly installed packages:"
+
+
+def test_totalsize_description_field_search(lib_dir):
+    out = run_list(lib_dir, '-f', 'Name', 'vim', '-t')
+    assert out[0] == 'total package size where Name matches "vim":'
+
+
+def test_totalsize_description_filter_and_field_search_combine(lib_dir):
+    out = run_list(lib_dir, '-e', '-f', 'Licenses', 'GPL', '-t')
+    assert out[0] == 'total size of explicitly installed packages where Licenses matches "GPL":'
 
 
 def test_scoped_invert(lib_dir, cache_db):

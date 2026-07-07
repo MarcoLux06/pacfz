@@ -47,8 +47,13 @@ show_usage() {
 
 show_total() {
   GREEN=$'\033[32m'
-  echo "selected package size:$GREEN"
-  python "$SCRIPT_LIST" "${PYTHON_ARGS[@]}"
+  RESET=$'\033[0m'
+  local output
+  output=$(python "$SCRIPT_LIST" "${PYTHON_ARGS[@]}")
+  local desc_line="${output%$'\n'*}"
+  local number_line="${output##*$'\n'}"
+  echo "$desc_line"
+  echo "${GREEN}${number_line}${RESET}"
 }
 
 show_interactive() {

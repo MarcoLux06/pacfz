@@ -36,6 +36,102 @@ WHERE_CLAUSES = {
     'notoptdep': f"{OPT_REQUIRED_BY_FIELD} = 'None'",
 }
 
+# Human-readable phrase for each canned filter, used to build the
+# descriptive sentence -t/--totalsize prints. Keyed the same way as
+# WHERE_CLAUSES/CANNED_FILTER_ALIASES resolve to, so this can't drift out
+# of sync with which filters actually exist.
+#
+# Generic + composable by design: rather than hand-crafting a sentence per
+# combination (which doesn't scale — this project alone has 6 boolean
+# filters, 2 notes filters, arbitrary -f/-a text, and invert, giving far
+# too many combinations to enumerate by hand), each active filter
+# contributes its own phrase, and build_totalsize_description() joins
+# whatever's active into one sentence. Missing/unrecognized flags fall
+# back to a sensible generic default rather than raising.
+FILTER_PHRASES = {
+    'foreign': 'foreign',
+    'orphan': 'orphan',
+    'explicit': 'explicitly installed',
+    'deps': 'dependency',
+    'notadep': 'not required by anything',
+    'notoptdep': 'not an optional dependency for anything',
+}
+
+
+def _describe_active_filters(args) -> List[str]:
+    """Return one adjective phrase per active boolean filter, in a stable
+    order, suitable for use directly before the word "packages".
+
+    Reads the parsed argparse namespace directly (not a re-derived list),
+    so this can't disagree with what the query itself actually did.
+    """
+    phrases = []
+    for attr, key in (
+            ('foreign', 'foreign'), ('orphans', 'orphan'), ('explicit', 'explicit'),
+            ('deps', 'deps'), ('notadep', 'notadep'), ('notoptdep', 'notoptdep'),
+    ):
+        if getattr(args, attr, False):
+            phrases.append(FILTER_PHRASES.get(key, key))
+    return phrases
+
+
+def _describe_qualifiers(args) -> List[str]:
+    """Return trailing qualifier phrases: notes filter + -f/-a searches.
+
+    These read naturally as their own clause after "packages" (e.g.
+    "packages with a note", "packages where Name matches \"vim\""), unlike
+    the boolean filters in _describe_active_filters, which read as
+    adjectives that belong *before* "packages".
+    """
+    phrases = []
+    if getattr(args, 'has_note', False):
+        phrases.append('with a note')
+    elif getattr(args, 'no_note', False):
+        phrases.append('without a note')
+
+    for field, value in (getattr(args, 'field_searches', None) or []):
+        phrases.append(f'where {field} matches "{value}"')
+    for value in (getattr(args, 'any_field_searches', None) or []):
+        phrases.append(f'where any field matches "{value}"')
+    return phrases
+
+
+def build_totalsize_description(args) -> str:
+    """Build the descriptive sentence printed above -t/--totalsize's number.
+
+    Generic and composable: every active filter contributes its own
+    phrase (via FILTER_PHRASES / _describe_qualifiers), joined into one
+    sentence. Falls back to a plain default when nothing is active, so
+    `pacfz -t` alone still reads naturally instead of an empty sentence.
+    """
+    filter_phrases = _describe_active_filters(args)
+    search_phrases = _describe_qualifiers(args)
+    bare_invert = bool(getattr(args, 'invert_args', None)) and '__ALL__' in args.invert_args
+
+    if not filter_phrases and not search_phrases and not bare_invert:
+        return "total package size"
+
+    # "foreign, explicitly installed packages with a note where Name
+    # matches "vim""  ->  join the descriptive adjectives, then the noun,
+    # then any trailing qualifiers (notes / field searches).
+    descriptor = ', '.join(filter_phrases)
+    sentence = f"total size of {descriptor} packages" if descriptor else "total package size"
+
+    if search_phrases:
+        sentence += ' ' + ' and '.join(search_phrases)
+
+    # Bare -v inverts everything just described; -v FILTER only affects
+    # that one named filter and is handled by simply not including it
+    # above (list_packages.py already excludes inverted filters from
+    # where_filters before this runs), so only bare invert needs a note.
+    if getattr(args, 'invert_args', None) and '__ALL__' in args.invert_args:
+        sentence = f"total size of packages NOT matching: {descriptor or 'the above'}"
+        if search_phrases:
+            sentence += ' ' + ' and '.join(search_phrases)
+
+    return sentence
+
+
 # Maps every short letter / long spelling to It's WHERE_CLAUSES key, for
 # resolving the -v/--invert FILTER argument.
 CANNED_FILTER_ALIASES = {
@@ -543,6 +639,7 @@ def main() -> None:
     try:
         if args.totalsize:
             total = compute_total_size(query_kwargs, notes_filter)
+            print(build_totalsize_description(args) + ":")
             print(bytes_to_human(total))
             return
 

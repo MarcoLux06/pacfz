@@ -1,5 +1,6 @@
 # build files
 /build/
+*.tar.gz
 
 # Python
 __pycache__/
@@ -14,4 +15,4 @@ pyproject.toml
 uv.lock
 
 # for codeberg token
-/token.env
+token_prod.env
