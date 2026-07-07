@@ -32,6 +32,14 @@ def _db_scalar(cache_db, sql):
         conn.close()
 
 
+def _db_scalar_with_params(cache_db, sql, params):
+    conn = sqlite3.connect(cache_db)
+    try:
+        return conn.execute(sql, params).fetchone()[0]
+    finally:
+        conn.close()
+
+
 def test_no_args_lists_all_sorted(lib_dir, cache_db):
     names = run_list(lib_dir)
     expected = _db_scalar(cache_db, 'SELECT COUNT(*) FROM packages')
@@ -76,14 +84,41 @@ def test_sort_by_size_desc_default(lib_dir, cache_db):
     assert names[0] == largest
 
 
-def test_has_note_filter(lib_dir):
+def test_has_note_filter(lib_dir, notes_db_path_fixture, cache_db):
+    # Ground truth comes from the notes DB fixture itself, not a
+    # hard-coded package name — this must stay correct no matter which
+    # real packages the fixture's notes.db happens to have notes on.
+    # --has-note filters packages.db, so a noted package that isn't
+    # actually present there (e.g. since uninstalled) correctly can't
+    # appear in the results — intersect with packages.db, don't just take
+    # every name notes.db happens to have a row for.
+    notes_conn = sqlite3.connect(notes_db_path_fixture)
+    try:
+        noted = {row[0] for row in notes_conn.execute('SELECT name FROM user_data')}
+    finally:
+        notes_conn.close()
+
+    pkg_conn = sqlite3.connect(cache_db)
+    try:
+        expected = {
+            name for name in noted
+            if pkg_conn.execute('SELECT 1 FROM packages WHERE Name = ?', (name,)).fetchone()
+        }
+    finally:
+        pkg_conn.close()
+
     names = run_list(lib_dir, '--has-note')
-    assert names == ['lavat-git']
+    assert set(names) == expected
 
 
-def test_no_note_filter_excludes_noted(lib_dir):
+def test_no_note_filter_excludes_noted(lib_dir, notes_db_path_fixture):
+    conn = sqlite3.connect(notes_db_path_fixture)
+    try:
+        noted = {row[0] for row in conn.execute('SELECT name FROM user_data')}
+    finally:
+        conn.close()
     names = run_list(lib_dir, '--no-note')
-    assert 'lavat-git' not in names
+    assert noted.isdisjoint(names)
     assert names  # everything else
 
 
@@ -107,11 +142,21 @@ def test_total_size_respects_filter(lib_dir, cache_db):
     assert foreign_total < grand_total  # sanity: the filter actually narrowed
 
 
-def test_total_size_with_notes_filter(lib_dir, cache_db):
+def test_total_size_with_notes_filter(lib_dir, cache_db, notes_db_path_fixture):
     # B2 + notes composition: total over only the noted packages.
     from preview_item import bytes_to_human
-    noted_size = _db_scalar(
-        cache_db, "SELECT SUM(Installed_Size) FROM packages WHERE Name = 'lavat-git'"
+
+    notes_conn = sqlite3.connect(notes_db_path_fixture)
+    try:
+        noted_names = [row[0] for row in notes_conn.execute('SELECT name FROM user_data')]
+    finally:
+        notes_conn.close()
+
+    placeholders = ','.join('?' for _ in noted_names)
+    noted_size = _db_scalar_with_params(
+        cache_db,
+        f"SELECT SUM(Installed_Size) FROM packages WHERE Name IN ({placeholders})",
+        noted_names,
     )
     out = run_list(lib_dir, '-t', '--has-note')
     assert out[-1] == bytes_to_human(noted_size)
@@ -171,14 +216,42 @@ def test_scoped_invert(lib_dir, cache_db):
     assert len(names) == expected
 
 
-def test_preview_renders_note(lib_dir):
-    res = run_preview(lib_dir, 'lavat-git')
+def _a_noted_package_that_exists(notes_db_path_fixture, cache_db):
+    """A (name, note) pair where the package both has a note (per the
+    notes DB fixture) and exists in packages.db, so the preview has
+    something real to render. Not hard-coded, since which packages happen
+    to have notes is fixture data that's expected to change over time.
+    """
+    notes_conn = sqlite3.connect(notes_db_path_fixture)
+    try:
+        noted_rows = dict(notes_conn.execute('SELECT name, note FROM user_data'))
+    finally:
+        notes_conn.close()
+
+    pkg_conn = sqlite3.connect(cache_db)
+    try:
+        for name, note in noted_rows.items():
+            if pkg_conn.execute('SELECT 1 FROM packages WHERE Name = ?', (name,)).fetchone():
+                return name, note
+    finally:
+        pkg_conn.close()
+    return None, None
+
+
+def test_preview_renders_note(lib_dir, notes_db_path_fixture, cache_db):
+    name, note = _a_noted_package_that_exists(notes_db_path_fixture, cache_db)
+    assert name is not None, "no noted package in the fixture also exists in packages.db"
+
+    res = run_preview(lib_dir, name)
     assert res.returncode == 0
-    assert 'Build from source' in res.stdout  # the note text
+    assert note in res.stdout  # the actual note text
     assert 'Note' in res.stdout
 
 
-def test_preview_hide_notes(lib_dir):
-    res = run_preview(lib_dir, 'lavat-git', '--hide-notes')
+def test_preview_hide_notes(lib_dir, notes_db_path_fixture, cache_db):
+    name, note = _a_noted_package_that_exists(notes_db_path_fixture, cache_db)
+    assert name is not None
+
+    res = run_preview(lib_dir, name, '--hide-notes')
     assert res.returncode == 0
-    assert 'Build from source' not in res.stdout
+    assert note not in res.stdout

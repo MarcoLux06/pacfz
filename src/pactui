@@ -12,6 +12,7 @@ Prototype scope: just the package overview screen (search + facet filters
 import os
 import sys
 import time
+from datetime import datetime
 
 # Resolve the sibling lib/ directory the same way the bash launchers do:
 # next to this script in a dev checkout, or /usr/share/pacfz/lib once
@@ -667,6 +668,27 @@ def _format_log_event(event: pacman_log.LogEvent) -> Text:
     return text
 
 
+def log_event_sort_key(event: pacman_log.LogEvent):
+    """Sort key for ordering LogEvents most-recent-first.
+
+    Parses the timestamp into a real timezone-aware datetime rather than
+    comparing the raw ISO-8601-with-offset string directly: plain string
+    comparison of "YYYY-MM-DDTHH:MM:SS+HHMM" is NOT timezone-aware and only
+    sorts correctly by coincidence — a log spanning a timezone change (e.g.
+    installed in a UTC chroot, then used post-boot in local time — a real
+    case a fresh archinstall log hits) can have a later real moment sort as
+    "earlier" under naive string comparison.
+
+    Falls back to the raw string (tagged so it never compares against a
+    real datetime, which would raise TypeError) if a timestamp is ever
+    unparseable, so one bad line can't crash the whole sort.
+    """
+    try:
+        return (0, datetime.fromisoformat(event.timestamp))
+    except ValueError:
+        return (-1, event.timestamp)
+
+
 class OverviewScreen(Screen):
     """Screen 1: package stats (as a pre-defined tree) + the pacman log.
 
@@ -769,12 +791,11 @@ class OverviewScreen(Screen):
             table.add_row(Text(f"[could not read pacman.log: {e}]", style="error"))
             return
 
-        # Most recent first. Sorted explicitly by timestamp rather than
-        # just reversing file order — pacman.log isn't guaranteed to be
-        # strictly chronological throughout (e.g. across a log rotation or
-        # a manually edited/concatenated log). ISO-8601 timestamps sort
-        # correctly as plain strings, no parsing needed.
-        for event in sorted(events, key=lambda e: e.timestamp, reverse=True):
+        # Most recent first. Sorted explicitly by timestamp (via
+        # log_event_sort_key) rather than just reversing file order or
+        # comparing timestamps as plain strings — see that function's
+        # docstring for why naive string comparison isn't safe here.
+        for event in sorted(events, key=log_event_sort_key, reverse=True):
             table.add_row(_format_log_event(event))
 
 
