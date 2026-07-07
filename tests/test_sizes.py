@@ -34,8 +34,8 @@ def test_convert_size_to_bytes_comma_locale(text, expected):
 
 
 @pytest.mark.parametrize("value,expected", [
-    (0, "0.00 B"),
-    (512, "512.00 B"),
+    (0, "0 B"),
+    (512, "512 B"),
     (1024, "1.00 KiB"),
     (1024 ** 2, "1.00 MiB"),
     (1024 ** 3, "1.00 GiB"),

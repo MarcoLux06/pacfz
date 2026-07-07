@@ -145,7 +145,7 @@ CANNED_FILTER_ALIASES = {
 
 
 # ---------------------------------------------------------------------------
-# First-run cache build (B1)
+# First-run cache build
 # ---------------------------------------------------------------------------
 def build_cache_db() -> None:
     """Build the package cache by invoking create_db.py. Raises on failure."""
@@ -221,7 +221,7 @@ def resolve_field_name(field: str, valid_columns: List[str]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Query building (M2)
+# Query building
 # ---------------------------------------------------------------------------
 def _field_condition(col: str, value: str, exact: bool) -> Tuple[str, str]:
     """Build a single ``-f/--field`` condition and its bound parameter."""
@@ -363,7 +363,7 @@ def build_query(where_clauses=None, invert_clauses=None, invert_all=False,
 
 
 # ---------------------------------------------------------------------------
-# Execution (M4)
+# Execution
 # ---------------------------------------------------------------------------
 def _passes_notes_filter(name: str, notes_filter: Optional[str],
                          noted: Optional[set]) -> bool:
@@ -405,7 +405,7 @@ def iter_names(query: str, params=None, notes_filter: Optional[str] = None,
 
 def compute_total_size(query_kwargs: dict, notes_filter: Optional[str],
                        db_path: str = DB_PATH) -> int:
-    """Sum Installed_Size over the filtered package set (B2).
+    """Sum Installed_Size over the filtered package set.
 
     Without a notes filter this is a single SUM in SQL. With one, we fetch
     (name, size) and sum in Python - avoiding a giant `IN (...)` that would

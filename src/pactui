@@ -638,8 +638,6 @@ class PackageSearchScreen(Screen):
 # ---------------------------------------------------------------------------
 # Screen 1: Overview
 # ---------------------------------------------------------------------------
-# Screen 1: Overview
-# ---------------------------------------------------------------------------
 LOG_ACTION_STYLE = {
     "installed": "success",
     "upgraded": "warning",
@@ -799,6 +797,13 @@ class PacTUIApp(App):
     def on_mount(self) -> None:
         self.register_theme(ONE_DARK)
         self.theme = "one-dark"
+
+        # Build the cache before any screen mounts. Without this,
+        # PackageSearchScreen's FilterPanel (which queries the schema in
+        # its own on_mount) can race a first-run machine that has no cache
+        # DB yet, surfacing as an unhandled sqlite "unable to open database
+        # file" the moment the Search screen is installed.
+        lp.ensure_cache_db()
 
         self.install_screen(OverviewScreen(), name="overview")
         self.install_screen(PackageSearchScreen(), name="search")

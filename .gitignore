@@ -1,6 +1,7 @@
 # build files
 /build/
-*.tar.gz
+/*.tar.gz
+/.SRCINFO
 
 # Python
 __pycache__/

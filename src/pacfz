@@ -66,8 +66,10 @@ show_interactive() {
 
   # When --hide-notes is passed, forward it so previewItem skips the notes DB.
   local notes_flag=""
+  local -a preview_args=()
   if [[ "$SHOW_NOTES" == "false" ]]; then
     notes_flag=" --hide-notes"
+    preview_args=(--hide-notes)
   fi
 
   # The preview command is a single string that fzf runs through a shell, with
@@ -109,7 +111,7 @@ local fzf_opts=(
 
   echo "$package_list" \
   | fzf "${fzf_opts[@]}" \
-  | python "$SCRIPT_PREVIEW"$notes_flag
+  | python "$SCRIPT_PREVIEW" "${preview_args[@]}"
 }
 
 create_database() {

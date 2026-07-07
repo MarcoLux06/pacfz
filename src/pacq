@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # pacq - non-interactive query into the pacman package database.
-# Forwards all flags straight to list_packages.py except -h/--help,
-# which prints this script's own usage instead of argparse's.
+# Forwards all flags straight to list_packages.py except -h/--help and
+# -r/--refresh, which pacq handles itself (the same way pacfz does), since
+# neither is a list_packages.py flag.
 
 # Find list_packages.py either next to this script (running straight from a
 # git checkout) or under /usr/share/pacfz (installed via the PKGBUILD).
@@ -12,6 +13,7 @@ else
   PACFZ_LIBDIR="/usr/share/pacfz/lib"
 fi
 SCRIPT_LIST="$PACFZ_LIBDIR/list_packages.py"
+SCRIPT_CREATE_DB="$PACFZ_LIBDIR/create_db.py"
 
 show_usage() {
   echo "Usage: pacq [OPTIONS]"
@@ -25,13 +27,23 @@ show_usage() {
   echo ""
   echo "Other:"
   echo "  -h, --help          Show this help message"
+  echo "  -r, --refresh       Refresh the package database"
   echo "  --version           Show the pacfz version"
+}
+
+create_database() {
+  # don't spam the chat
+  python "$SCRIPT_CREATE_DB" '--quiet'
 }
 
 for arg in "$@"; do
   case "$arg" in
     -h|--help)
       show_usage
+      exit 0
+      ;;
+    -r|--refresh)
+      create_database
       exit 0
       ;;
   esac

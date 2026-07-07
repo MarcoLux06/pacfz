@@ -87,8 +87,31 @@ def colorize_value(value: str) -> str:
     return result
 
 
+# Strips ANSI/OSC escape sequences and C0/C1 control characters before a
+# value is ever written to the terminal. Package metadata (Description,
+# Packager, URL, ...) comes from pacman -Qi, which in turn comes from
+# whatever the package's own build script chose to put there - a hostile
+# package could embed escape sequences (title spoofing, OSC clipboard
+# writes, etc.) in a field we'd otherwise print verbatim.
+_ESCAPE_SEQ_RE = re.compile(
+    r'\x1b\[[0-9;]*[a-zA-Z]'  # CSI sequences, e.g. \x1b[31m
+    r'|\x1b\][^\x07]*(\x07|\x1b\\)'  # OSC sequences, terminated by BEL or ST
+    r'|[\x00-\x08\x0b-\x1f]'  # other C0 controls (keep \t/\n out of this set)
+)
+
+
+def sanitize_terminal_value(value: str) -> str:
+    """Strip escape sequences and control characters from a value that will
+    be printed to the terminal, so untrusted package metadata can't inject
+    ANSI/OSC sequences into the user's terminal session.
+    """
+    return _ESCAPE_SEQ_RE.sub('', value)
+
+
 def format_line(label: str, value: str) -> str:
     """Format a single label-value line with colors."""
+    value = sanitize_terminal_value(value)
+
     label_color, value_color = LABEL_FORMAT.get(
         label, (FALLBACK_LABEL_COLOR, FALLBACK_VALUE_COLOR)
     )
@@ -128,14 +151,13 @@ def bytes_to_human(bytes_value) -> str:
         if bytes_value >= divisor:
             size = bytes_value / divisor
             if unit == 'B':
-                return f"{int(size)}.00 {unit}"
+                return f"{int(size)} {unit}"
             return f"{size:.2f} {unit}"
 
-    return f"{bytes_value}.00 B"
+    return f"{bytes_value} B"
 
 
-def query_database(db_path: Optional[str] = None,
-                   name: str = None) -> Optional[Dict[str, str]]:
+def query_database(name: str, db_path: Optional[str] = None) -> Optional[Dict[str, str]]:
     """Fetch a single package row as a dict, with '_' replaced by ' ' in keys."""
     if db_path is None:
         db_path = DB_PATH

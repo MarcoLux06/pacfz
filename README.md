@@ -52,6 +52,9 @@ A third, TUI front-end is in development - built with
 [Textual](https://github.com/Textualize/textual), sharing the exact same query engine as `pacfz`/`pacq`. It adds an
 overview screen (package stats, pacman log) alongside a mouse-and-keyboard-driven search view. Feature parity to
 `pacfz` / `pacq` documentation is still in progress. if you're curious, try `pactui` but expect rough edges.
+Keybindings: `f1`/`f2` switch between the Overview and Search screens, `/` focuses the search box, `j`/`k`/`g`/`G` move
+the table cursor (up/down/top/bottom), `ctrl+r` rebuilds the package cache from the Search screen, `r` refreshes the
+Overview screen's stats and log, and `q` quits.
 
 ## Requirements
 
