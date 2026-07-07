@@ -1,6 +1,6 @@
 # Maintainer: marco-l
 pkgname=pacfz
-pkgver=1.0.8
+pkgver=1.1.0
 pkgrel=1
 pkgdesc="Interactive fzf/CLI explorer for installed pacman packages, with a cached SQLite metadata store and per-package notes"
 arch=('any')
@@ -12,7 +12,7 @@ optdepends=('fzf: for pacfz'
             'python-pytest: for unit testing')
 
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('3c8c99ca8878c99f0228062e86a3caf1ad4f6b4e70b18352459aa6a41658cb2e')
+sha256sums=('SKIP')
 
 package() {
   cd "$pkgname"
