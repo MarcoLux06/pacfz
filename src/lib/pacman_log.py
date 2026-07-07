@@ -42,12 +42,12 @@ COMMAND_RE = re.compile(r"^Running\s+'(?P<command>.*)'$")
 
 @dataclass(frozen=True)
 class LogEvent:
-    timestamp: str          # raw string, e.g. "2026-07-01T17:31:30+0200"
-    action: str              # 'installed' | 'upgraded' | 'removed' | 'command'
-    name: Optional[str] = None       # package name, for install/upgrade/remove
+    timestamp: str  # raw string, e.g. "2026-07-01T17:31:30+0200"
+    action: str  # 'installed' | 'upgraded' | 'removed' | 'command'
+    name: Optional[str] = None  # package name, for install/upgrade/remove
     old_version: Optional[str] = None
     new_version: Optional[str] = None
-    command: Optional[str] = None    # raw command string, for action='command'
+    command: Optional[str] = None  # raw command string, for action='command'
 
 
 def _parse_versions(action: str, versions: str):

@@ -1,6 +1,5 @@
-import pytest
-
 import list_packages as lp
+import pytest
 
 
 def test_default_query():
@@ -61,7 +60,7 @@ def test_invert_all_negates_group():
 def test_scoped_invert_keeps_precondition():
     q, _ = lp.build_query(where_clauses=['explicit'], invert_clauses=['notadep'])
     assert "Install_Reason = 'Explicitly installed'" in q  # precondition kept
-    assert 'NOT (' in q                                     # scoped negation
+    assert 'NOT (' in q  # scoped negation
     assert 'Required_By' in q
 
 

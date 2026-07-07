@@ -22,8 +22,8 @@ if not os.path.isfile(os.path.join(_LIB_DIR, 'list_packages.py')):
     _LIB_DIR = '/usr/share/pacfz/lib'
 sys.path.insert(0, _LIB_DIR)
 
-from dataclasses import dataclass, field as dataclass_field
-from typing import List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Optional
 
 try:
     from rich.text import Text

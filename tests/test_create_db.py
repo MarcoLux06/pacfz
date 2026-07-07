@@ -3,7 +3,6 @@ import sqlite3
 
 import create_db
 
-
 SAMPLE_PACKAGES = [
     {
         'Name': 'firefox', 'Version': '1.0-1', 'Description': 'browser',

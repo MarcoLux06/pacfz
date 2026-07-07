@@ -3,8 +3,6 @@ import sqlite3
 import subprocess
 import sys
 
-import pytest
-
 
 def run_list(lib_dir, *args):
     """Run list_packages.py as a subprocess; return stdout lines."""

@@ -23,8 +23,8 @@ def test_default_description_no_filters():
 
 def test_single_boolean_filter():
     assert (
-        lp.build_totalsize_description(_args(foreign=True))
-        == "total size of foreign packages"
+            lp.build_totalsize_description(_args(foreign=True))
+            == "total size of foreign packages"
     )
 
 

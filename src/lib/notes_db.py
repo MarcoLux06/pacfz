@@ -37,7 +37,8 @@ def ensure_db(db_path: Optional[str] = None) -> None:
     try:
         conn.execute(
             '''
-            CREATE TABLE IF NOT EXISTS user_data (
+            CREATE TABLE IF NOT EXISTS user_data
+            (
                 name TEXT PRIMARY KEY,
                 note TEXT NOT NULL DEFAULT ''
             )
@@ -122,7 +123,8 @@ def set_note(name: str, note: str, db_path: Optional[str] = None) -> None:
     try:
         conn.execute(
             '''
-            INSERT INTO user_data (name, note) VALUES (?, ?)
+            INSERT INTO user_data (name, note)
+            VALUES (?, ?)
             ON CONFLICT(name) DO UPDATE SET note = excluded.note
             ''',
             (name, note),
