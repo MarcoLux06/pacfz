@@ -265,7 +265,7 @@ def _write_packages(target_path: str, packages: List[Dict[str, str]],
 
 def create_database(db_path: str, *, packages: Optional[List[Dict[str, str]]] = None,
                     foreign_packages: Optional[Set[str]] = None,
-                    verbose: bool = True) -> None:
+                    verbose: bool = True, show_columns: Optional[bool] = None) -> None:
     """Create the package cache DB.
 
     The DB is built in a temp file in the same directory and then atomically
@@ -276,9 +276,20 @@ def create_database(db_path: str, *, packages: Optional[List[Dict[str, str]]] = 
     ``packages`` and ``foreign_packages`` can be supplied to bypass pacman
     (used by the tests); otherwise they're fetched live.
 
+    ``verbose`` gates the final "Database created successfully / Total
+    packages inserted / Foreign packages marked" summary. ``show_columns``
+    separately gates the earlier "Found N packages with M unique fields /
+    Columns: ..." preview, which is noisier and only meant for the true
+    --verbose CLI state, not the default (summary-only) one - defaults to
+    matching ``verbose`` if not given, for callers that still expect the
+    old combined behavior.
+
     Raises:
         RuntimeError: on any fatal error.
     """
+    if show_columns is None:
+        show_columns = verbose
+
     logger.info("Starting database creation")
     ensure_db_directory(db_path)
 
@@ -290,7 +301,7 @@ def create_database(db_path: str, *, packages: Optional[List[Dict[str, str]]] = 
         raise RuntimeError("No packages found from pacman -Qi")
 
     all_columns = sorted({col for pkg in packages for col in pkg.keys()})
-    if verbose:
+    if show_columns:
         print(f"Found {len(packages)} packages with {len(all_columns)} unique fields.")
         print(f"Columns: {', '.join(all_columns)}\n")
 
@@ -364,25 +375,40 @@ def main() -> None:
         description="Create and maintain the pacman package database",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("-q", "--quiet", action="store_true",
-                        help="minimal output (WARNING level)")
+    verbosity_group = parser.add_mutually_exclusive_group()
+    verbosity_group.add_argument(
+        "-q", "--quiet", action="store_true",
+        help="no output at all (no summary, no logs, no sample table)",
+    )
+    verbosity_group.add_argument(
+        "--verbose", action="store_true",
+        help="full output: INFO-level logs, the summary, and a sample of "
+             "packages, in addition to what's printed by default",
+    )
     parser.add_argument("-p", "--path", help="database path")
     args = parser.parse_args()
 
-    verbose = not args.quiet
+    # Three real states, not two:
+    #   --quiet    -> print_summary=False, show_sample=False, logger silent
+    #   (default)  -> print_summary=True,  show_sample=False, logger silent
+    #   --verbose  -> print_summary=True,  show_sample=True,  logger at INFO
+    print_summary = not args.quiet
+    show_sample = args.verbose
+    log_level = logging.INFO if args.verbose else logging.WARNING
+
     db_path = args.path or DB_PATH
 
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
     handler = logging.StreamHandler(sys.stderr)
-    handler.setLevel(logging.INFO if verbose else logging.WARNING)
+    handler.setLevel(log_level)
     handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
     logger.addHandler(handler)
 
     try:
-        create_database(db_path, verbose=verbose)
-        display_packages(db_path, 5, verbose)
+        create_database(db_path, verbose=print_summary, show_columns=args.verbose)
+        display_packages(db_path, 5, show_sample)
     except Exception as e:
         logger.error(f"Script failed: {e}")
         print(f"Error: {e}", file=sys.stderr)

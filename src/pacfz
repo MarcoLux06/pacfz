@@ -37,6 +37,9 @@ show_usage() {
   echo "  -h, --help          Show this help message"
   echo "  -r, --refresh       Refresh the package database"
   echo "  --version           Show the pacfz version"
+  echo "  --verbose           Print extra diagnostic output (the resolved SQL"
+  echo "                      query for a normal search, or full logs/summary"
+  echo "                      for -r/--refresh). Not available in pacq."
   echo ""
   echo "Inside the interactive picker:"
   echo "  ctrl-r              Rebuild the package cache and refresh the visible"
@@ -115,8 +118,11 @@ local fzf_opts=(
 }
 
 create_database() {
-  # don't spam the chat
-  python "$SCRIPT_CREATE_DB" '--quiet'
+  if [[ "$VERBOSE" == "true" ]]; then
+    python "$SCRIPT_CREATE_DB" --verbose
+  else
+    python "$SCRIPT_CREATE_DB"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -125,25 +131,32 @@ create_database() {
 EXACT_MATCH="false"
 SHOW_NOTES="true"
 SHOW_TOTAL="false"
+VERBOSE="false"
 PYTHON_ARGS=()
 
 # First pass: detect bash-only flags regardless of position. -t/--totalsize
-# is checked here too (not just via `case $1` below) because it can appear
-# anywhere on the command line, e.g. `pacfz -e -t` — with only `$1` being
-# inspected, that combination used to fall through to the interactive
-# picker instead of printing the total, since -e (not -t) was in position 1.
+# and --verbose are checked here too (not just via `case $1` below) because
+# they can appear anywhere on the command line, e.g. `pacfz -e -t` — with
+# only `$1` being inspected, that combination used to fall through to the
+# interactive picker instead of printing the total, since -e (not -t) was
+# in position 1. --verbose specifically needs to be seen here (not just
+# left to fall through to list_packages.py via PYTHON_ARGS below) because
+# it also needs to reach create_db.py for the -r/--refresh path, which is
+# a different script PYTHON_ARGS was never aimed at.
 for arg in "$@"; do
   case "$arg" in
     --exact)      EXACT_MATCH="true"  ;;
     --hide-notes) SHOW_NOTES="false"  ;;
     -t|--totalsize) SHOW_TOTAL="true" ;;
+    --verbose)    VERBOSE="true"      ;;
   esac
 done
 
 # Build the argument array forwarded to Python, stripping bash-only flags.
 # An array (not a string) preserves values containing spaces. -t/--totalsize
-# stays in PYTHON_ARGS (list_packages.py needs to see it to compute the
-# FILTERED total) — only --exact/--hide-notes are bash-only and stripped.
+# and --verbose both stay in PYTHON_ARGS (list_packages.py needs to see
+# them — the former to compute the FILTERED total, the latter to print the
+# resolved query) — only --exact/--hide-notes are bash-only and stripped.
 for arg in "$@"; do
   if [[ "$arg" != "--exact" && "$arg" != "--hide-notes" ]]; then
     PYTHON_ARGS+=("$arg")

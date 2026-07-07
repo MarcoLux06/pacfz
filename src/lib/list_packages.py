@@ -132,6 +132,18 @@ def build_totalsize_description(args) -> str:
     return sentence
 
 
+def print_verbose_query(query: str, params) -> None:
+    """Print the resolved SQL query and bound params to stderr.
+
+    Used by --verbose, on both the normal listing path and -t/--totalsize
+    (where it's called with a query built the same way compute_total_size()
+    builds its own, so what's shown matches what actually runs even though
+    compute_total_size doesn't take a verbose flag itself).
+    """
+    print(f"[verbose] query:  {query}", file=sys.stderr)
+    print(f"[verbose] params: {params}", file=sys.stderr)
+
+
 # Maps every short letter / long spelling to It's WHERE_CLAUSES key, for
 # resolving the -v/--invert FILTER argument.
 CANNED_FILTER_ALIASES = {
@@ -534,6 +546,10 @@ def main() -> None:
         "--no-description", action="store_true", dest="no_description",
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--verbose", action="store_true",
+        help="print the resolved SQL query and parameters to stderr before running it",
+    )
 
     parser.add_argument("-m", "--foreign", action="store_true", help="only foreign packages")
     parser.add_argument("-o", "--orphans", action="store_true", help="only orphan packages")
@@ -642,6 +658,15 @@ def main() -> None:
 
     try:
         if args.totalsize:
+            if args.verbose:
+                # compute_total_size builds its own query internally with a
+                # different select_cols/include_order for the actual SUM —
+                # rebuild the same shape here purely for display, so what's
+                # shown matches the filtering that will actually run.
+                display_query, display_params = build_query(
+                    **query_kwargs, select_cols='SUM("Installed_Size")', include_order=False,
+                )
+                print_verbose_query(display_query, display_params)
             total = compute_total_size(query_kwargs, notes_filter)
             if not args.no_description:
                 print(build_totalsize_description(args) + ":")
@@ -649,6 +674,8 @@ def main() -> None:
             return
 
         query, params = build_query(**query_kwargs)
+        if args.verbose:
+            print_verbose_query(query, params)
         for name in iter_names(query, params, notes_filter):
             print(name)
     except ValueError as e:

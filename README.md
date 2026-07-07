@@ -148,6 +148,9 @@ Other:
   -h, --help          Show this help message
   -r, --refresh       Refresh the package database
   --version           Show the pacfz version
+  --verbose           Print extra diagnostic output (the resolved SQL
+                      query for a normal search, or full logs/summary
+                      for -r/--refresh). Not available in pacq.
 
 Inside the interactive picker:
   ctrl-r              Rebuild the package cache and refresh the visible

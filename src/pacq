@@ -2,7 +2,10 @@
 # pacq - non-interactive query into the pacman package database.
 # Forwards all flags straight to list_packages.py except -h/--help and
 # -r/--refresh, which pacq handles itself (the same way pacfz does), since
-# neither is a list_packages.py flag.
+# neither is a list_packages.py flag. --verbose is explicitly REJECTED
+# (see below) rather than forwarded, even though list_packages.py itself
+# understands it — pacq's whole purpose is clean, scriptable output, and
+# debug/query-printing has no place in that.
 
 # Find list_packages.py either next to this script (running straight from a
 # git checkout) or under /usr/share/pacfz (installed via the PKGBUILD).
@@ -29,6 +32,9 @@ show_usage() {
   echo "  -h, --help          Show this help message"
   echo "  -r, --refresh       Refresh the package database"
   echo "  --version           Show the pacfz version"
+  echo ""
+  echo "Note: --verbose is not available in pacq (scriptable output only)."
+  echo "      Use pacfz --verbose instead."
 }
 
 create_database() {
@@ -45,6 +51,11 @@ for arg in "$@"; do
     -r|--refresh)
       create_database
       exit 0
+      ;;
+    --verbose)
+      echo "pacq: --verbose is not supported (pacq's output is meant to be" >&2
+      echo "scriptable/pipeable). Use pacfz --verbose instead." >&2
+      exit 1
       ;;
   esac
 done
