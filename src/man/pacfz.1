@@ -1,0 +1,304 @@
+.TH PACFZ 1 "2026-07-08" "pacfz 1.0.9" "User Commands"
+.SH NAME
+pacfz \- interactive fzf\-based explorer for installed pacman packages
+.SH SYNOPSIS
+.B pacfz
+[OPTIONS]
+.SH DESCRIPTION
+.B pacfz
+snapshots
+.BR pacman (8)
+package metadata (via
+.B pacman -Qi
+and
+.BR "pacman -Qqm" )
+into a small SQLite cache, then presents it through an interactive
+.BR fzf (1)
+picker: fuzzy-search the package list on the left, and get a full
+colorized metadata preview: description, dependencies, install
+reason, size, licenses, and any note you've attached, on the right.
+.PP
+The cache builds itself automatically on first use, and rebuilds
+atomically (built to a temporary file, then swapped into place), so a
+refresh can never leave behind a half\-written database.
+.PP
+.B pacfz
+shares its entire filter, sort, and search flag set with
+.BR pacq (1),
+its non\-interactive sibling: anything you can narrow down here, you
+can also script with
+.BR pacq (1).
+Flags specific to the interactive picker itself (note management,
+.BR fzf (1)
+matching mode, preview visibility) exist only in
+.BR pacfz .
+.SH OPTIONS
+.SS Filter options
+.TP
+.BR \-m ", " \-\-foreign
+Only foreign (AUR / non\-repo) packages.
+.TP
+.BR \-o ", " \-\-orphans
+Only orphan packages: installed as a dependency, and now required by
+nothing. Does not consider optional\-dependency relationships; see
+.B "A NOTE ON ORPHAN"
+below.
+.TP
+.BR \-e ", " \-\-explicit
+Only explicitly installed packages.
+.TP
+.BR \-d ", " \-\-deps
+Only packages installed as a dependency.
+.TP
+.BR \-n ", " \-\-notadep
+Only packages not required by anything.
+.TP
+.BR \-k ", " \-\-notoptdep
+Only packages that are not an optional dependency for anything.
+.TP
+.B \-\-has\-note
+Only packages that have a user note attached.
+.TP
+.B \-\-no\-note
+Only packages without a user note.
+.TP
+\fB\-f\fR \fIFIELD VALUE\fR, \fB\-\-field\fR \fIFIELD VALUE\fR
+Only packages where
+.I FIELD
+matches
+.IR VALUE .
+Repeatable; multiple
+.B \-f
+conditions are AND\-combined. Matching is substring by default; see
+.B \-x
+below.
+.TP
+\fB\-a\fR \fIVALUE\fR, \fB\-\-any\fR \fIVALUE\fR
+Only packages where
+.I any
+field matches
+.IR VALUE .
+Repeatable, and AND\-combined with everything else active.
+.TP
+.BR \-x ", " \-\-exact\-match
+Use exact equality instead of substring matching for
+.B \-f
+and
+.BR \-a .
+.TP
+\fB\-v\fR \fR[\fIFILTER\fR]\fR, \fB\-\-invert\fR \fR[\fIFILTER\fR]
+Invert results. Bare
+.B \-v
+inverts the entire query, applied last, as a single unit. Given a
+.IR FILTER ,
+.B \-v
+instead inverts only that one canned filter, leaving every other
+active filter in place as a precondition; repeatable. See
+.B "INVERTING RESULTS"
+below.
+.SS Sort options
+.TP
+\fB\-s\fR \fR[\fIFIELD\fR]\fR, \fB\-\-sort\-by\fR \fR[\fIFIELD\fR]
+Sort by
+.IR FIELD .
+Default field is
+.IR Name ;
+bare
+.B \-s
+with no field sorts by
+.IR Installed_Size .
+.B \-\-size
+is a synonym for this option.
+.TP
+.B \-\-asc
+Sort ascending. Applies to whichever field is being sorted.
+.TP
+.B \-\-desc
+Sort descending.
+.SS Size
+.TP
+.BR \-t ", " \-\-totalsize
+Print the total installed size of exactly the packages selected by
+the other active filters, not the whole system.
+.SS Display options
+.TP
+.B \-\-exact
+Use exact (not fuzzy) matching inside the
+.BR fzf (1)
+picker itself. This is
+.BR fzf 's
+own matching mode, distinct from
+.B \-x
+above, which affects the SQL\-level
+.B \-f / \-a
+filters before any results ever reach
+.BR fzf .
+.TP
+.B \-\-hide\-notes
+Hide user notes in the preview pane. The notes database is not even
+opened in this mode.
+.SS Notes
+.TP
+\fB\-D\fR \fIPKG NOTE\fR
+Set
+.I NOTE
+as the note for package
+.IR PKG .
+.TP
+\fB\-D\fR \fIPKG\fR \fB\-d\fR
+Delete the note for package
+.IR PKG .
+.TP
+.B \-\-notes\-list
+List every package that currently has a note.
+.SS Other
+.TP
+.BR \-h ", " \-\-help
+Show a usage summary and exit.
+.TP
+.BR \-r ", " \-\-refresh
+Rebuild the package cache from
+.BR pacman (8)
+and exit. Prints a short summary (packages inserted, foreign packages
+marked) unless
+.B \-\-verbose
+is also given.
+.TP
+.B \-\-version
+Print the installed pacfz version and exit.
+.TP
+.B \-\-verbose
+Print extra diagnostic output. For a normal search, this prints the
+resolved SQL query and bound parameters to standard error before
+entering
+.BR fzf (1).
+For
+.BR \-r / \-\-refresh ,
+this additionally prints INFO\-level build logs and a sample of the
+packages just inserted. Not available in
+.BR pacq (1).
+.SH INTERACTIVE PICKER KEYS
+.TP
+.B ctrl\-r
+Rebuild the package cache and reload the visible list without leaving
+.BR fzf (1).
+The header briefly shows \(lq✓ cache refreshed at HH:MM:SS\(rq
+so repeated presses are visibly distinct from each other.
+.SH EXIT STATUS
+.TP
+.B 0
+Success. This includes the case where the query matched no packages:
+.B pacfz
+prints \(lqNo packages found.\(rq and exits without opening
+.BR fzf (1).
+.TP
+.B 1
+An error occurred: invalid flag combination, a database error, or
+.BR fzf (1)
+is not installed.
+.SH EXAMPLES
+.TP
+.B pacfz \-m
+Browse foreign packages interactively.
+.TP
+.B pacfz \-e \-\-desc \-\-size
+Browse explicitly installed packages, largest first.
+.TP
+.B pacfz \-o \-k
+Browse orphans that are also not an optional dependency for anything.
+.TP
+.B pacfz \-e \-v notadep \-v notoptdep
+Browse explicitly installed packages that
+.I are
+required by something, optionally or not (see
+.B "INVERTING RESULTS"
+below).
+.TP
+.B pacfz \-t \-\-verbose
+Print the resolved SQL query, then the total installed size of every
+package.
+.SH INVERTING RESULTS
+Bare
+.B \-v
+negates everything else you specified, as one unit, applied last:
+.PP
+.RS
+.EX
+pacfz \-m \-v            # NOT foreign
+.EE
+.RE
+.PP
+\fB\-v\fR \fIFILTER\fR instead negates only that one named filter,
+leaving every other active filter in place as a precondition, and is
+repeatable:
+.PP
+.RS
+.EX
+pacfz \-e \-v orphan                    # explicit, and NOT an orphan
+pacfz \-e \-v notadep \-v notoptdep      # explicit, and NOT
+                                        # (notadep AND notoptdep)
+.EE
+.RE
+.PP
+.I FILTER
+is one of
+.IR foreign ", " orphan ", " explicit ", " deps ", " notadep ", "
+.IR notoptdep ,
+or its short letter:
+.IR m / o / e / d / n / k .
+.SH A NOTE ON ORPHAN
+Here,
+.I orphan
+means: installed as a dependency, and now required by nothing
+(equivalent to
+.BR "pacman \-Qdt" ).
+It does
+.B not
+consider optional\-dependency relationships, so a package that is
+.I only
+an optional dependency of something else still counts as an orphan.
+Combine with
+.B \-k
+to additionally exclude those:
+.BR "pacfz \-o \-k" .
+.SH A NOTE ON LOCALE
+.B pacfz
+parses the package sizes
+.B pacman -Qi
+prints, and those are formatted according to the system locale.
+Both a period (\(lq56.72 KiB\(rq) and a comma (\(lq56,72 KiB\(rq) are
+accepted as the decimal separator. Locales that use a different
+separator style for this purpose (for instance a space or apostrophe
+as a thousands separator) are not supported, and a size in that form
+will fail to parse during a cache rebuild. Both binary
+(\fIKiB\fR, \fIMiB\fR, \fIGiB\fR, \fITiB\fR) and decimal
+(\fIKB\fR, \fIMB\fR, \fIGB\fR, \fITB\fR) units are recognized, each
+converted with its correct multiplier.
+.SH ENVIRONMENT
+.TP
+.B PACFZ_DB_PATH
+Overrides the package cache DB path outright. Default:
+.IR $XDG_CACHE_HOME/pacman_packages.db .
+.TP
+.B PACFZ_NOTES_DB_PATH
+Overrides the notes DB path outright. Default:
+.IR $XDG_DATA_HOME/pacfz/user_data.db .
+.SH FILES
+.TP
+.I ~/.cache/pacman_packages.db
+The package metadata cache, rebuilt from
+.BR pacman (8)
+output. Not removed by uninstalling the package; see
+.BR ENVIRONMENT
+above to relocate it, or remove it by hand.
+.TP
+.I ~/.local/share/pacfz/user_data.db
+Per\-package user notes. Also not removed by uninstalling the
+package.
+.SH SEE ALSO
+.BR pacq (1),
+.BR pactui (1),
+.BR pacman (8),
+.BR fzf (1)
+.SH AUTHOR
+marco-l

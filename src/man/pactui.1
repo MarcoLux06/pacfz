@@ -1,0 +1,140 @@
+.TH PACTUI 1 "2026-07-08" "pacfz 1.0.9" "User Commands"
+.SH NAME
+pactui \- interactive terminal UI for exploring installed pacman
+packages (experimental)
+.SH SYNOPSIS
+.B pactui
+[\-\-version]
+.SH DESCRIPTION
+.B pactui
+is a third front\-end sharing the exact same query engine and cache as
+.BR pacfz (1)
+and
+.BR pacq (1),
+built with the Textual framework. Unlike
+.BR pacfz (1),
+it does not use
+.BR fzf (1)
+and is not driven by command\-line flags; instead it presents a
+full\-screen, mouse\-and\-keyboard\-driven interface with two screens.
+.PP
+This front\-end is
+.B experimental
+and does not yet have feature parity with
+.BR pacfz (1)
+/
+.BR pacq (1).
+Expect rough edges.
+.PP
+.B pactui
+requires
+.I python\-textual
+to be installed; this is an optional dependency of the
+.I pacfz
+package, not a hard requirement.
+.SH SCREENS
+.SS Overview
+The default screen on launch. Split into two panes:
+.TP
+.B Stats
+A fixed\-shape summary tree: total packages installed, split into
+official and foreign counts, and total installed size.
+.TP
+.B Log
+A view of
+.IR /var/log/pacman.log ,
+parsed into individual install / upgrade / removal / command events
+and listed most recent first.
+.SS Search
+A filter\-and\-preview screen: a search box and results table on the
+left, a full colorized metadata preview of the highlighted package on
+the right, and a panel of facet filters (foreign, orphan, dependency
+status, notes, field search) along the bottom, similarly to
+.BR pacfz (1)'s
+own filter flags.
+.SH OPTIONS
+.TP
+.B \-\-version
+Print the installed pacfz version and exit, without launching the
+interface.
+.SH KEY BINDINGS
+These apply throughout the interface unless noted otherwise.
+.TP
+.B f1
+Switch to the Overview screen.
+.TP
+.B f2
+Switch to the Search screen.
+.TP
+.B /
+Focus the search box (Search screen only).
+.TP
+.BR j / k
+Move the highlighted row down or up, in whichever table currently has
+focus.
+.TP
+.B g
+Jump to the top of the current table.
+.TP
+.B G
+Jump to the bottom of the current table.
+.TP
+.B ctrl+r
+Rebuild the package cache in the background and refresh the visible
+results (Search screen only).
+.TP
+.B r
+Refresh the Overview screen's stats and log without rebuilding the
+package cache itself.
+.TP
+.B q
+Quit.
+.PP
+Every action is also reachable with the mouse: click a screen's tab
+indicator to switch to it, click a table row to select it, click a
+filter control to toggle it.
+.SH STATE ACROSS SCREENS
+Switching screens does not reset either one: the Search screen keeps
+whatever search text, filters, and selected row you left it with, and
+the Overview screen keeps its own state independently. Each screen's
+filters are also independent of each other; there is a single shared
+query engine underneath, but no shared filter state between screens.
+.SH EXIT STATUS
+.TP
+.B 0
+Normal exit, either via
+.B q
+or
+.BR \-\-version .
+.TP
+.B 1
+.I python\-textual
+is not installed.
+.SH ENVIRONMENT
+.TP
+.B PACFZ_DB_PATH
+Overrides the package cache DB path outright. Default:
+.IR $XDG_CACHE_HOME/pacman_packages.db .
+.TP
+.B PACFZ_NOTES_DB_PATH
+Overrides the notes DB path outright. Default:
+.IR $XDG_DATA_HOME/pacfz/user_data.db .
+.SH FILES
+.TP
+.I ~/.cache/pacman_packages.db
+The package metadata cache, shared with
+.BR pacfz (1)
+and
+.BR pacq (1).
+.TP
+.I ~/.local/share/pacfz/user_data.db
+Per\-package user notes, shared with the other two front\-ends.
+.TP
+.I /var/log/pacman.log
+Read (not written) by the Overview screen's Log pane.
+.SH SEE ALSO
+.BR pacfz (1),
+.BR pacq (1),
+.BR pacman (8)
+.SH AUTHOR
+marco-l
