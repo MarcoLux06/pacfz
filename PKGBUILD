@@ -12,7 +12,7 @@ optdepends=('fzf: for pacfz'
             'python-pytest: for unit testing')
 
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('ff867036edebba54dcd432c2836da7cc1d4b1a1d0db90fa54e634a7b023745a7')
 
 package() {
   cd "$pkgname"
