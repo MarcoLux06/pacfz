@@ -8,12 +8,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv
+ignore/
 
 # Editors
 *.swp
 .idea
 pyproject.toml
 uv.lock
-
-# for codeberg token
-token_prod.env
