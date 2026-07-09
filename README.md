@@ -83,6 +83,25 @@ This builds and installs `pacfz` as a normal pacman package:
 
 You can also just run `./src/pacfz` / `./src/pacq` straight from the downloaded folder.
 
+### Shell shortcut
+
+`pacfz` ships a key binding for bash and zsh, similar to fzf's own ctrl+t / ctrl+r. Source the one for your shell:
+
+```sh
+source /usr/share/pacfz/key-bindings.bash    # bash
+source /usr/share/pacfz/key-bindings.zsh     # zsh
+```
+
+This binds **ctrl+p**. Pressing it opens the exact same interactive session `pacfz` itself gives you, live preview
+pane and all. The only difference is what happens once you pick a package: instead of printing a final preview and
+exiting, the selected name is inserted at your cursor, so `pacman -R ` + ctrl+p + Enter gives you `pacman -R firefox`
+ready to run.
+
+### Man pages
+
+`man pacfz`, `man pacq`, and `man pactui` are installed as part of the package and cover the same ground as this
+README, in the usual man page format. `pactui`'s page is marked experimental to match its current state.
+
 ### Uninstall
 
 ```sh
