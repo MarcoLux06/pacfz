@@ -27,5 +27,8 @@ package() {
     src/lib/pacman_log.py \
     -t "$pkgdir/usr/share/pacfz/lib/"
 
+  install -Dm644 src/key-bindings.bash "$pkgdir/usr/share/pacfz/key-bindings.bash"
+  install -Dm644 src/key-bindings.zsh "$pkgdir/usr/share/pacfz/key-bindings.zsh"
+
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
 }
