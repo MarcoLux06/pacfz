@@ -117,9 +117,13 @@ local fzf_opts=(
     fzf_opts+=(-e)
   fi
 
-  echo "$package_list" \
-  | fzf "${fzf_opts[@]}" \
-  | python "$SCRIPT_PREVIEW" "${preview_args[@]}"
+  if [[ "$PRINT_SELECTION_ONLY" == "true" ]]; then
+    echo "$package_list" | fzf "${fzf_opts[@]}"
+  else
+    echo "$package_list" \
+    | fzf "${fzf_opts[@]}" \
+    | python "$SCRIPT_PREVIEW" "${preview_args[@]}"
+  fi
 }
 
 create_database() {
@@ -137,6 +141,7 @@ EXACT_MATCH="false"
 SHOW_NOTES="true"
 SHOW_TOTAL="false"
 VERBOSE="false"
+PRINT_SELECTION_ONLY="false"
 PYTHON_ARGS=()
 
 # First pass: detect bash-only flags regardless of position. -t/--totalsize
@@ -147,13 +152,16 @@ PYTHON_ARGS=()
 # in position 1. --verbose specifically needs to be seen here (not just
 # left to fall through to list_packages.py via PYTHON_ARGS below) because
 # it also needs to reach create_db.py for the -r/--refresh path, which is
-# a different script PYTHON_ARGS was never aimed at.
+# a different script PYTHON_ARGS was never aimed at. --print-selection is
+# the same story: it changes what show_interactive() does at the very end
+# of its own pipeline, not something list_packages.py needs to see at all.
 for arg in "$@"; do
   case "$arg" in
     --exact)      EXACT_MATCH="true"  ;;
     --hide-notes) SHOW_NOTES="false"  ;;
     -t|--totalsize) SHOW_TOTAL="true" ;;
     --verbose)    VERBOSE="true"      ;;
+    --print-selection) PRINT_SELECTION_ONLY="true" ;;
   esac
 done
 
@@ -161,9 +169,10 @@ done
 # An array (not a string) preserves values containing spaces. -t/--totalsize
 # and --verbose both stay in PYTHON_ARGS (list_packages.py needs to see
 # them — the former to compute the FILTERED total, the latter to print the
-# resolved query) — only --exact/--hide-notes are bash-only and stripped.
+# resolved query) — --exact/--hide-notes/--print-selection are all
+# bash-only and stripped.
 for arg in "$@"; do
-  if [[ "$arg" != "--exact" && "$arg" != "--hide-notes" ]]; then
+  if [[ "$arg" != "--exact" && "$arg" != "--hide-notes" && "$arg" != "--print-selection" ]]; then
     PYTHON_ARGS+=("$arg")
   fi
 done
