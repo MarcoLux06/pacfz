@@ -30,5 +30,8 @@ package() {
   install -Dm644 src/key-bindings.bash "$pkgdir/usr/share/pacfz/key-bindings.bash"
   install -Dm644 src/key-bindings.zsh "$pkgdir/usr/share/pacfz/key-bindings.zsh"
 
+  install -Dm644 src/man/pacfz.1 src/man/pacq.1 src/man/pactui.1 \
+    -t "$pkgdir/usr/share/man/man1/"
+
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
 }
