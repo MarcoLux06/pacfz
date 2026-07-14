@@ -11,8 +11,8 @@ optdepends=('fzf: for pacfz'
             'python-textual: for pactui'
             'python-pytest: for unit testing')
 
-source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+source=("pacfz-1.1.4.tar.gz::https://codeberg.org/attachments/ad2fcb06-a76f-47bf-8e66-639c330d46a6")
+sha256sums=('6bd57510b6f4f42336752f0dddaf5f2d08d441f85a5df43089f189deb099917c')
 
 package() {
   cd "$pkgname"
