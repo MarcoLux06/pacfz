@@ -83,6 +83,28 @@ This builds and installs `pacfz` as a normal pacman package:
 
 You can also just run `./src/pacfz` / `./src/pacq` straight from the downloaded folder.
 
+### AUR
+
+<!-- TODO: once the AUR push is confirmed live at https://aur.archlinux.org/packages/pacfz,
+     remove this comment. -->
+
+`pacfz` is also available on the [AUR](https://aur.archlinux.org/packages/pacfz). With an AUR helper:
+
+```sh
+yay -S pacfz    # or paru -S pacfz, or whichever helper you use
+```
+
+Without one, the manual route is the same as any other AUR package:
+
+```sh
+git clone https://aur.archlinux.org/pacfz.git
+cd pacfz
+makepkg -si
+```
+
+The AUR package builds from the same source as `make install` above, it's just packaged for AUR helpers to pick up
+automatically, updates included.
+
 ### Shell shortcut
 
 `pacfz` ships a key binding for bash and zsh, similar to fzf's own ctrl+t / ctrl+r. Source the one for your shell:
