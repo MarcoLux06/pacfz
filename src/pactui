@@ -33,7 +33,6 @@ try:
     from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
     from textual.message import Message
     from textual.screen import Screen
-    from textual.theme import Theme
     from textual.widgets import (
         Checkbox, DataTable, Footer, Header, Input, Label, RadioButton, RadioSet,
         Select, Static,
@@ -49,24 +48,6 @@ except ImportError:
 import list_packages as lp
 import notes_db
 import preview_item
-
-# One Dark (Atom's default dark theme) — canonical palette, not an
-# approximation: background/foreground/accents match the original
-# atom/one-dark-syntax values used across onedark.vim and One Dark Pro.
-ONE_DARK = Theme(
-    name="one-dark",
-    dark=True,
-    background="#282c34",
-    surface="#2c313a",
-    panel="#21252b",
-    primary="#61afef",  # blue
-    secondary="#56b6c2",  # cyan
-    accent="#c678dd",  # purple
-    warning="#e5c07b",  # yellow
-    error="#e06c75",  # red
-    success="#98c379",  # green
-    foreground="#abb2bf",
-)
 
 SELECT_COLS = '"Name", "Version", "Installed_Size", "Install_Reason"'
 
@@ -276,11 +257,12 @@ class FilterPanel(Vertical):
        size — give it an explicit fixed width instead, wide enough for the
        longest label plus the radio marker. */
     FilterPanel RadioSet {
-        width: 28;
+        width: 13;
         height: auto;
     }
 
     FilterPanel .facet-label {
+        width: auto;
         color: $accent;
         text-style: bold;
     }
@@ -307,38 +289,38 @@ class FilterPanel(Vertical):
         with row_container(id="facet-row"):
             with Vertical(classes="tristate-group"):
                 yield Static("Foreign", classes="facet-label")
-                with RadioSet(id="foreign-filter"):
+                with RadioSet(id="foreign-filter", compact=True):
                     for choice in TRISTATE_CHOICES:
                         yield RadioButton(choice, value=(choice == "Any"))
             with Vertical(classes="tristate-group"):
                 yield Static("Orphan", classes="facet-label")
-                with RadioSet(id="orphan-filter"):
+                with RadioSet(id="orphan-filter", compact=True):
                     for choice in TRISTATE_CHOICES:
                         yield RadioButton(choice, value=(choice == "Any"))
             with Vertical(classes="tristate-group"):
                 yield Static("Dependency", classes="facet-label")
-                with RadioSet(id="dependency-filter"):
+                with RadioSet(id="dependency-filter", compact=True):
                     for choice in TRISTATE_CHOICES:
                         yield RadioButton(choice, value=(choice == "Any"))
             with Vertical(classes="tristate-group"):
-                yield Static("Req'd by something", classes="facet-label")
-                with RadioSet(id="required-by-filter"):
+                yield Static("Required by", classes="facet-label")
+                with RadioSet(id="required-by-filter", compact=True):
                     for choice in TRISTATE_CHOICES:
                         yield RadioButton(choice, value=(choice == "Any"))
             with Vertical(classes="tristate-group"):
-                yield Static("Optional dep for something", classes="facet-label")
-                with RadioSet(id="optdep-for-filter"):
+                yield Static("Optional for", classes="facet-label")
+                with RadioSet(id="optdep-for-filter", compact=True):
                     for choice in TRISTATE_CHOICES:
                         yield RadioButton(choice, value=(choice == "Any"))
             with Vertical(classes="tristate-group"):
                 yield Static("Notes", classes="facet-label")
-                with RadioSet(id="notes-filter"):
+                with RadioSet(id="notes-filter", compact=True):
                     for choice in NOTES_CHOICES:
                         yield RadioButton(choice, value=(choice == "Any"))
-            with Vertical(classes="tristate-group"):
+            with Vertical(classes="tristate-group search-field-group"):
                 yield Static("Search field", classes="facet-label")
                 yield Select([], id="field-select")
-                with RadioSet(id="search-mode"):
+                with RadioSet(id="search-mode", compact=True):
                     for choice in SEARCH_MODE_CHOICES:
                         yield RadioButton(choice, value=(choice == "Substring"))
 
@@ -571,8 +553,7 @@ class PacTUIApp(App):
     ]
 
     def on_mount(self) -> None:
-        self.register_theme(ONE_DARK)
-        self.theme = "one-dark"
+        self.theme = "atom-one-dark"
 
         # Build the cache before the screen mounts. Without this,
         # PackageSearchScreen's FilterPanel (which queries the schema in
