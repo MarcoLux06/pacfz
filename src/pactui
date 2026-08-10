@@ -34,7 +34,7 @@ try:
     from textual.message import Message
     from textual.screen import Screen
     from textual.widgets import (
-        Checkbox, DataTable, Footer, Header, Input, Label, RadioButton, RadioSet,
+        DataTable, Footer, Header, Input, Label, RadioButton, RadioSet,
         Select, Static,
     )
 except ImportError:
@@ -109,7 +109,6 @@ def _short_reason(reason: str) -> str:
 # require its negation.
 TRISTATE_CHOICES = ("Any", "Yes", "No")
 NOTES_CHOICES = ("Any", "Has note", "No note")
-SEARCH_MODE_CHOICES = ("Substring", "Exact")
 
 # (state field name, WHERE_CLAUSES key) for every tri-state relationship
 # filter. "Yes"/"No" become preconditions or scoped inverts via
@@ -134,7 +133,6 @@ class FilterState:
     notes: str = "Any"  # one of NOTES_CHOICES
     search_text: str = ""
     search_field: str = "Name"  # real column name, e.g. "Licenses"
-    search_mode: str = "Substring"  # one of SEARCH_MODE_CHOICES
 
 
 def filter_state_to_query_kwargs(state: FilterState):
@@ -178,7 +176,6 @@ def filter_state_to_query_kwargs(state: FilterState):
         where_clauses=where_clauses or None,
         invert_each=invert_each or None,
         field_searches=field_searches or None,
-        exact_match=(state.search_mode == "Exact"),
         select_cols=SELECT_COLS,
     )
     return query_kwargs, notes_filter
@@ -197,11 +194,11 @@ class FilterPanel(Vertical):
     `orientation` is fixed at construction time ("horizontal" or "vertical")
     — a static per-call-site choice, not a runtime-toggleable setting.
 
-    The main free-text search box is deliberately NOT part of this panel —
-    it lives in the containing screen (the "main search bar"), and the
-    screen forwards its value in via set_search_text(). The panel only owns
-    the *field* (which column to search) and *mode* (substring/exact)
-    dropdown/radio that govern how that text is interpreted.
+    The main free-text search box and the field-to-search dropdown are
+    deliberately NOT part of this panel — they live in the containing
+    screen's top row, and the screen forwards the search text in via
+    set_search_text(). This panel only owns the tri-state facet filters
+    (foreign/orphan/dependency/etc.).
     """
 
     class Changed(Message):
@@ -266,10 +263,6 @@ class FilterPanel(Vertical):
         color: $accent;
         text-style: bold;
     }
-
-    FilterPanel Select {
-        width: 26;
-    }
     """
 
     def __init__(self, orientation: str = "horizontal", id: Optional[str] = None) -> None:
@@ -317,18 +310,6 @@ class FilterPanel(Vertical):
                 with RadioSet(id="notes-filter", compact=True):
                     for choice in NOTES_CHOICES:
                         yield RadioButton(choice, value=(choice == "Any"))
-            with Vertical(classes="tristate-group search-field-group"):
-                yield Static("Search field", classes="facet-label")
-                yield Select([], id="field-select")
-                with RadioSet(id="search-mode", compact=True):
-                    for choice in SEARCH_MODE_CHOICES:
-                        yield RadioButton(choice, value=(choice == "Substring"))
-
-    def on_mount(self) -> None:
-        columns = lp.get_table_columns()
-        field_select = self.query_one("#field-select", Select)
-        field_select.set_options((col, col) for col in columns)
-        field_select.value = "Name"
 
     def set_search_text(self, text: str) -> None:
         """Called by the containing screen to forward its main search box's value."""
@@ -347,16 +328,8 @@ class FilterPanel(Vertical):
         self.state.required_by_something = self._radio_label("#required-by-filter") or "Any"
         self.state.optdep_for_something = self._radio_label("#optdep-for-filter") or "Any"
         self.state.notes = self._radio_label("#notes-filter") or "Any"
-        self.state.search_mode = self._radio_label("#search-mode") or "Substring"
-        field = self.query_one("#field-select", Select).value
-        if field is not Select.NULL:
-            self.state.search_field = str(field)
 
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
-        self._sync_state_from_widgets()
-        self.post_message(self.Changed(self))
-
-    def on_select_changed(self, event: Select.Changed) -> None:
         self._sync_state_from_widgets()
         self.post_message(self.Changed(self))
 
@@ -364,10 +337,13 @@ class FilterPanel(Vertical):
 class PackageSearchScreen(Screen):
     """Screen 2: search + facet filters + table + preview.
 
-    Layout: split top/bottom first. The top region is split left/right (40%
-    search+table, 60% preview). The bottom region is a FilterPanel, laid out
-    horizontally and sized to its content (not a fixed max-height) so it's
-    only ever as tall as the filters actually need.
+    Layout: search-related controls live together at the top, in their own
+    scrollable row (the free-text search bar, paired with which field to
+    search), table+preview below that, and the tri-state facet filters
+    (foreign/orphan/dependency/etc.) in their own scrollable row at the
+    very bottom. Both rows scroll horizontally rather than shrinking their
+    contents when the terminal is too narrow to fit everything at once —
+    same mechanism, applied consistently top and bottom.
     """
 
     CSS = """
@@ -383,6 +359,22 @@ class PackageSearchScreen(Screen):
     #left-pane {
         width: 40%;
         height: 100%;
+    }
+
+    #search-controls-row {
+        height: 3;
+        width: 100%;
+    }
+
+    #search-input {
+        width: 34;
+        height: 3;
+    }
+
+    #search-field-select {
+        width: 22;
+        height: 3;
+        margin-left: 1;
     }
 
     #package-table {
@@ -423,7 +415,9 @@ class PackageSearchScreen(Screen):
 
         with Horizontal(id="top-region"):
             with Vertical(id="left-pane"):
-                yield Input(placeholder="Search by name...", id="search-input")
+                with HorizontalScroll(id="search-controls-row"):
+                    yield Input(placeholder="Search by name...", id="search-input")
+                    yield Select([], id="search-field-select")
                 yield VimDataTable(id="package-table", cursor_type="row")
 
             with Vertical(id="preview-pane"):
@@ -440,6 +434,13 @@ class PackageSearchScreen(Screen):
         table = self.query_one("#package-table", DataTable)
         for header, width in COLUMNS:
             table.add_column(header, width=width, key=header)
+
+        columns = lp.get_table_columns()
+        field_select = self.query_one("#search-field-select", Select)
+        field_select.set_options(
+            (col.replace("_", " "), col) for col in columns
+        )
+        field_select.value = "Name"
 
         self.refresh_results()
         self.query_one("#search-input", Input).focus()
@@ -502,6 +503,13 @@ class PackageSearchScreen(Screen):
             table = self.query_one("#package-table", DataTable)
             if table.row_count:
                 table.focus()
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "search-field-select":
+            if event.value is not Select.BLANK:
+                panel = self.query_one("#search-filter-panel", FilterPanel)
+                panel.state.search_field = str(event.value)
+                self.refresh_results()
 
     def on_filter_panel_changed(self, event: "FilterPanel.Changed") -> None:
         self.refresh_results()

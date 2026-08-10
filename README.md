@@ -46,13 +46,11 @@ picker with **ctrl-r**, without leaving fzf.
 
 For the full flag reference, run `pacfz -h` / `pacq -h`, or see [Usage](#usage) below.
 
-### `pactui` (experimental)
+### `pactui`
 
-A third, TUI front-end is in development - built with
-[Textual](https://github.com/Textualize/textual), sharing the exact same query engine as `pacfz`/`pacq`. Feature parity
-to `pacfz` / `pacq` documentation is still in progress. if you're curious, try `pactui` but expect rough edges.
-Keybindings: `/` focuses the search box, `j`/`k`/`g`/`G` move the table cursor (up/down/top/bottom), `ctrl+r` rebuilds
-the package cache from the Search screen, `r` refreshes the Overview screen's stats and log, and `q` quits.
+A third, TUI front-end built with [Textual](https://github.com/Textualize/textual), sharing the exact same query engine
+as `pacfz`/`pacq`. Feature parity to `pacfz` / `pacq`. Keybindings: `/` focuses the search box, `j`/`k`/`g`/`G` move the
+table cursor (up/down/top/bottom), `ctrl+r` rebuilds the package cache from the Search screen and `q` quits.
 
 ## Requirements
 

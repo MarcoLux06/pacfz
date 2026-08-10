@@ -1,30 +1,23 @@
-.TH PACTUI 1 "2026-07-08" "pacfz 1.0.9" "User Commands"
+.TH PACTUI 1 "2026-08-10" "pacfz 1.1.4" "User Commands"
 .SH NAME
-pactui \- interactive terminal UI for exploring installed pacman
-packages (experimental)
+pactui \- interactive terminal UI for exploring installed pacman packages
 .SH SYNOPSIS
 .B pactui
 [\-\-version]
 .SH DESCRIPTION
 .B pactui
-is a third front\-end sharing the exact same query engine and cache as
+is a third TUI front\-end built with the Textual framework, sharing the exact same query engine and cache as
 .BR pacfz (1)
 and
-.BR pacq (1),
-built with the Textual framework. Unlike
+.BR pacq (1).
+Unlike
 .BR pacfz (1),
 it does not use
 .BR fzf (1)
-and is not driven by command\-line flags; instead it presents a
-full\-screen, mouse\-and\-keyboard\-driven interface with two screens.
-.PP
-This front\-end is
-.B experimental
-and does not yet have feature parity with
+and is not driven by command\-line flags; instead, it presents a full\-screen, mouse\-and\-keyboard\-driven terminal user interface with feature parity to
 .BR pacfz (1)
-/
+and
 .BR pacq (1).
-Expect rough edges.
 .PP
 .B pactui
 requires
@@ -32,73 +25,37 @@ requires
 to be installed; this is an optional dependency of the
 .I pacfz
 package, not a hard requirement.
-.SH SCREENS
-.SS Overview
-The default screen on launch. Split into two panes:
-.TP
-.B Stats
-A fixed\-shape summary tree: total packages installed, split into
-official and foreign counts, and total installed size.
-.TP
-.B Log
-A view of
-.IR /var/log/pacman.log ,
-parsed into individual install / upgrade / removal / command events
-and listed most recent first.
-.SS Search
-A filter\-and\-preview screen: a search box and results table on the
-left, a full colorized metadata preview of the highlighted package on
-the right, and a panel of facet filters (foreign, orphan, dependency
-status, notes, field search) along the bottom, similarly to
+.SH INTERFACE
+A single search\-and\-preview view: a free\-text search bar and a dropdown for which field to search sit together at the top, the results table and a full colorized metadata preview of the highlighted package fill the middle, and a row of facet filters (foreign, orphan, dependency status, required\-by, optional\-for, notes) sits along the bottom, similarly to
 .BR pacfz (1)'s
 own filter flags.
+.PP
+Both the top search row and the bottom filter row scroll horizontally on their own when the terminal is too narrow to show everything at once.
 .SH OPTIONS
 .TP
 .B \-\-version
-Print the installed pacfz version and exit, without launching the
-interface.
+Print the installed pacfz version and exit, without launching the interface.
 .SH KEY BINDINGS
-These apply throughout the interface unless noted otherwise.
-.TP
-.B f1
-Switch to the Overview screen.
-.TP
-.B f2
-Switch to the Search screen.
 .TP
 .B /
-Focus the search box (Search screen only).
+Focus the search bar.
 .TP
 .BR j / k
-Move the highlighted row down or up, in whichever table currently has
-focus.
+Move the highlighted row down or up in the results table.
 .TP
 .B g
-Jump to the top of the current table.
+Jump to the top of the results table.
 .TP
 .B G
-Jump to the bottom of the current table.
+Jump to the bottom of the results table.
 .TP
 .B ctrl+r
-Rebuild the package cache in the background and refresh the visible
-results (Search screen only).
-.TP
-.B r
-Refresh the Overview screen's stats and log without rebuilding the
-package cache itself.
+Rebuild the package cache in the background and refresh the visible results.
 .TP
 .B q
 Quit.
 .PP
-Every action is also reachable with the mouse: click a screen's tab
-indicator to switch to it, click a table row to select it, click a
-filter control to toggle it.
-.SH STATE ACROSS SCREENS
-Switching screens does not reset either one: the Search screen keeps
-whatever search text, filters, and selected row you left it with, and
-the Overview screen keeps its own state independently. Each screen's
-filters are also independent of each other; there is a single shared
-query engine underneath, but no shared filter state between screens.
+Every action is also reachable with the mouse: click a table row to select it, click a filter control to toggle it, click and type in the search bar or field dropdown directly.
 .SH EXIT STATUS
 .TP
 .B 0
@@ -129,9 +86,6 @@ and
 .TP
 .I ~/.local/share/pacfz/user_data.db
 Per\-package user notes, shared with the other two front\-ends.
-.TP
-.I /var/log/pacman.log
-Read (not written) by the Overview screen's Log pane.
 .SH SEE ALSO
 .BR pacfz (1),
 .BR pacq (1),
