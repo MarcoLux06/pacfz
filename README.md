@@ -49,12 +49,10 @@ For the full flag reference, run `pacfz -h` / `pacq -h`, or see [Usage](#usage) 
 ### `pactui` (experimental)
 
 A third, TUI front-end is in development - built with
-[Textual](https://github.com/Textualize/textual), sharing the exact same query engine as `pacfz`/`pacq`. It adds an
-overview screen (package stats, pacman log) alongside a mouse-and-keyboard-driven search view. Feature parity to
-`pacfz` / `pacq` documentation is still in progress. if you're curious, try `pactui` but expect rough edges.
-Keybindings: `f1`/`f2` switch between the Overview and Search screens, `/` focuses the search box, `j`/`k`/`g`/`G` move
-the table cursor (up/down/top/bottom), `ctrl+r` rebuilds the package cache from the Search screen, `r` refreshes the
-Overview screen's stats and log, and `q` quits.
+[Textual](https://github.com/Textualize/textual), sharing the exact same query engine as `pacfz`/`pacq`. Feature parity
+to `pacfz` / `pacq` documentation is still in progress. if you're curious, try `pactui` but expect rough edges.
+Keybindings: `/` focuses the search box, `j`/`k`/`g`/`G` move the table cursor (up/down/top/bottom), `ctrl+r` rebuilds
+the package cache from the Search screen, `r` refreshes the Overview screen's stats and log, and `q` quits.
 
 ## Requirements
 
@@ -114,15 +112,15 @@ source /usr/share/pacfz/key-bindings.bash    # bash
 source /usr/share/pacfz/key-bindings.zsh     # zsh
 ```
 
-This binds **ctrl+p**. Pressing it opens the exact same interactive session `pacfz` itself gives you, live preview
-pane and all. The only difference is what happens once you pick a package: instead of printing a final preview and
-exiting, the selected name is inserted at your cursor, so `pacman -R ` + ctrl+p + Enter gives you `pacman -R firefox`
+This binds **ctrl+p**. Pressing it opens the exact same interactive session `pacfz` itself gives you, live preview pane
+and all. The only difference is what happens once you pick a package: instead of printing a final preview and exiting,
+the selected name is inserted at your cursor, so `pacman -R ` + ctrl+p + Enter gives you `pacman -R firefox`
 ready to run.
 
 ### Man pages
 
-`man pacfz`, `man pacq`, and `man pactui` are installed as part of the package and cover the same ground as this
-README, in the usual man page format. `pactui`'s page is marked experimental to match its current state.
+`man pacfz`, `man pacq`, and `man pactui` are installed as part of the package and cover the same ground as this README,
+in the usual man page format. `pactui`'s page is marked experimental to match its current state.
 
 ### Uninstall
 

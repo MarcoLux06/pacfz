@@ -3,7 +3,6 @@ import os
 import sqlite3
 import subprocess
 import sys
-from dataclasses import dataclass
 from typing import Iterator, List, Optional, Tuple
 
 from config import __version__, cache_db_path
@@ -447,43 +446,6 @@ def compute_total_size(query_kwargs: dict, notes_filter: Optional[str],
     try:
         row = conn.execute(query, params).fetchone()
         return row[0] or 0
-    finally:
-        conn.close()
-
-
-@dataclass(frozen=True)
-class SummaryStats:
-    total: int
-    official: int
-    foreign: int
-    total_size_bytes: int
-
-
-def get_summary_stats(db_path: str = DB_PATH) -> SummaryStats:
-    """Compute the counts/size shown on the overview screen.
-
-    Reuses build_query()/compute_total_size() rather than writing separate
-    ad hoc SQL, so this stays correct if WHERE_CLAUSES['foreign'] or the
-    size-summing logic (e.g. the notes-filter edge case) ever changes.
-    """
-    total = _scalar_count(None, db_path)
-    foreign = _scalar_count(['foreign'], db_path)
-    total_size = compute_total_size(
-        dict(where_clauses=None), notes_filter=None, db_path=db_path
-    )
-    return SummaryStats(
-        total=total, official=total - foreign, foreign=foreign,
-        total_size_bytes=total_size,
-    )
-
-
-def _scalar_count(where_clauses: Optional[List[str]], db_path: str) -> int:
-    query, params = build_query(
-        where_clauses=where_clauses, select_cols='COUNT(*)', include_order=False,
-    )
-    conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)
-    try:
-        return conn.execute(query, params).fetchone()[0] or 0
     finally:
         conn.close()
 

@@ -45,13 +45,3 @@ The natural instinct is to fill in the checksum while you're already editing `PK
 it's right there. That doesn't work, and it's not a workaround-able ordering, `sha256sums` has to describe the exact
 bytes of a file that only exists once the tag is live. `sha256sums=('SKIP')` in the meantime is fine and expected,
 it just means "not computed yet," not "broken."
-
-## AUR-specific notes (not yet relevant, kept here for later)
-
-This project isn't published to the AUR yet. When it is, the AUR side works differently in one important way: the
-AUR is its own git server (`ssh://aur@aur.archlinux.org/pacfz.git`), a completely separate repo from this one, whose
-entire contents are just `PKGBUILD` and a generated `.SRCINFO` (`make srcinfo` produces that). That `PKGBUILD` would
-still point its `source=()` at this repo's Codeberg releases, same as it does now, the AUR repo doesn't host any
-actual source, just the packaging recipe. Publishing there means copying the already-tested `PKGBUILD` from here
-into that separate checkout, regenerating `.SRCINFO`, and pushing there too, on top of everything above, not instead
-of it.

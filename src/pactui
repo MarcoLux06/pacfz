@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Prototype Textual TUI front-end for pacfz — the package overview view.
+"""pactui — Textual TUI front-end for pacfz, a focused search + preview view.
 
 This is a third front-end alongside `pacfz` (fzf-interactive) and `pacq`
 (non-interactive), not a replacement for either. It reuses the exact same
 data layer (list_packages.py, notes_db.py, preview_item.py) by importing
 them directly rather than shelling out — no subprocess, no text parsing.
 
-Prototype scope: just the package overview screen (search + facet filters
-+ table + preview). Multiple screens (dependency tree, history) come later.
+Deliberately single-purpose: search, filter, and preview installed
+packages, nothing else. No package-stats overview, no pacman.log viewer —
+other tools already do that well.
 """
 import os
 import sys
 import time
-from datetime import datetime
 
 # Resolve the sibling lib/ directory the same way the bash launchers do:
 # next to this script in a dev checkout, or /usr/share/pacfz/lib once
@@ -36,7 +36,7 @@ try:
     from textual.theme import Theme
     from textual.widgets import (
         Checkbox, DataTable, Footer, Header, Input, Label, RadioButton, RadioSet,
-        Select, Static, Tree,
+        Select, Static,
     )
 except ImportError:
     print("Error: python-textual is not installed, but is required for pactui.",
@@ -48,7 +48,6 @@ except ImportError:
 
 import list_packages as lp
 import notes_db
-import pacman_log
 import preview_item
 
 # One Dark (Atom's default dark theme) — canonical palette, not an
@@ -202,83 +201,6 @@ def filter_state_to_query_kwargs(state: FilterState):
         select_cols=SELECT_COLS,
     )
     return query_kwargs, notes_filter
-
-
-# ---------------------------------------------------------------------------
-# Shared: the screen-indicator dot bar
-# ---------------------------------------------------------------------------
-# (screen_name, label, action name on the App) — one entry per screen, in
-# display order. Both screens' dot bars are built from this single list, so
-# adding a future third screen only means adding one entry here.
-SCREEN_TABS = [
-    ("overview", "Overview", "goto_overview"),
-    ("search", "Search", "goto_search"),
-]
-
-
-class ScreenDot(Static):
-    """A single clickable dot representing one screen.
-
-    Active = accent color (set via the 'active' CSS class), inactive = gray.
-    Clicking it calls the given App action directly — same action the
-    f1/f2 key bindings already use, so click and keyboard stay equivalent.
-    """
-
-    DEFAULT_CSS = """
-    ScreenDot {
-        width: auto;
-        height: 1;
-        padding: 0 1;
-        color: $foreground-darken-2;
-    }
-    ScreenDot:hover {
-        text-style: bold;
-    }
-    ScreenDot.active {
-        color: $accent;
-        text-style: bold;
-    }
-    """
-
-    def __init__(self, label: str, action_name: str) -> None:
-        super().__init__(f"\u25cf {label}")
-        self._action_name = action_name
-
-    def on_click(self) -> None:
-        getattr(self.app, f"action_{self._action_name}")()
-
-
-class ScreenTabs(Horizontal):
-    """The full dot bar: one ScreenDot per entry in SCREEN_TABS.
-
-    `current` is the screen_name (first element of a SCREEN_TABS tuple)
-    that should render as active; call `set_current` to update it after a
-    screen switch.
-    """
-
-    DEFAULT_CSS = """
-    ScreenTabs {
-        height: 1;
-        width: 100%;
-        align: center middle;
-        background: $panel;
-    }
-    """
-
-    def __init__(self, current: str) -> None:
-        super().__init__()
-        self._current = current
-
-    def compose(self) -> ComposeResult:
-        for screen_name, label, action_name in SCREEN_TABS:
-            dot = ScreenDot(label, action_name)
-            dot.set_class(screen_name == self._current, "active")
-            yield dot
-
-    def set_current(self, screen_name: str) -> None:
-        self._current = screen_name
-        for dot, (name, _, _) in zip(self.query(ScreenDot), SCREEN_TABS):
-            dot.set_class(name == screen_name, "active")
 
 
 class FilterPanel(Vertical):
@@ -466,8 +388,6 @@ class PackageSearchScreen(Screen):
     only ever as tall as the filters actually need.
     """
 
-    TITLE = "Search"
-
     CSS = """
     Screen {
         layout: vertical;
@@ -518,7 +438,6 @@ class PackageSearchScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        yield ScreenTabs(current="search")
 
         with Horizontal(id="top-region"):
             with Vertical(id="left-pane"):
@@ -637,181 +556,17 @@ class PackageSearchScreen(Screen):
 
 
 # ---------------------------------------------------------------------------
-# Screen 1: Overview
-# ---------------------------------------------------------------------------
-LOG_ACTION_STYLE = {
-    "installed": "success",
-    "upgraded": "warning",
-    "removed": "error",
-    "command": "dim",
-}
-
-
-def _format_log_event(event: pacman_log.LogEvent) -> Text:
-    """Render one LogEvent as a single styled line for the log table/list."""
-    style = LOG_ACTION_STYLE.get(event.action, "")
-    ts = event.timestamp.split("+")[0].replace("T", " ")  # drop tz offset for readability
-    text = Text()
-    text.append(f"{ts}  ", style="dim")
-    if event.action == "command":
-        text.append("$ ", style=style)
-        text.append(event.command or "", style=style)
-    elif event.action == "upgraded":
-        text.append("upgraded  ", style=style)
-        text.append(event.name or "", style="bold")
-        text.append(f"  {event.old_version} -> {event.new_version}", style="dim")
-    else:
-        text.append(f"{event.action:<10}", style=style)
-        text.append(event.name or "", style="bold")
-        if event.new_version:
-            text.append(f"  {event.new_version}", style="dim")
-    return text
-
-
-def log_event_sort_key(event: pacman_log.LogEvent):
-    """Sort key for ordering LogEvents most-recent-first.
-
-    Parses the timestamp into a real timezone-aware datetime rather than
-    comparing the raw ISO-8601-with-offset string directly: plain string
-    comparison of "YYYY-MM-DDTHH:MM:SS+HHMM" is NOT timezone-aware and only
-    sorts correctly by coincidence — a log spanning a timezone change (e.g.
-    installed in a UTC chroot, then used post-boot in local time — a real
-    case a fresh archinstall log hits) can have a later real moment sort as
-    "earlier" under naive string comparison.
-
-    Falls back to the raw string (tagged so it never compares against a
-    real datetime, which would raise TypeError) if a timestamp is ever
-    unparseable, so one bad line can't crash the whole sort.
-    """
-    try:
-        return (0, datetime.fromisoformat(event.timestamp))
-    except ValueError:
-        return (-1, event.timestamp)
-
-
-class OverviewScreen(Screen):
-    """Screen 1: package stats (as a pre-defined tree) + the pacman log.
-
-    Deliberately reads pacman's own /var/log/pacman.log for history rather
-    than maintaining a separate tracking table — see pacman_log.py's module
-    docstring for the reasoning (authoritative source, no new tracking, at
-    the cost of being bounded by whatever log rotation is in effect).
-
-    The stats side is a *fixed*-shape tree (total -> official/foreign,
-    total size), not a dynamically-built one — every node is declared
-    up front in _populate_stats_tree, not derived from arbitrary data.
-    """
-
-    TITLE = "Overview"
-
-    CSS = """
-    #overview-body {
-        layout: horizontal;
-        height: 1fr;
-    }
-
-    #stats-pane {
-        width: 50%;
-        height: 100%;
-        padding: 0 1;
-    }
-
-    #log-pane {
-        width: 50%;
-        height: 100%;
-        border-left: solid $accent;
-        padding: 0 1;
-    }
-
-    #stats-tree {
-        height: auto;
-    }
-
-    #log-table {
-        height: 1fr;
-    }
-    """
-
-    BINDINGS = [
-        ("r", "refresh_overview", "Refresh"),
-    ]
-
-    def compose(self) -> ComposeResult:
-        yield Header(show_clock=False)
-        yield ScreenTabs(current="overview")
-        with Horizontal(id="overview-body"):
-            with Vertical(id="stats-pane"):
-                yield Tree("stats", id="stats-tree")
-            with Vertical(id="log-pane"):
-                yield Static("pacman log", classes="facet-label")
-                yield VimDataTable(id="log-table", cursor_type="row", zebra_stripes=True)
-        yield Footer()
-
-    def on_mount(self) -> None:
-        tree = self.query_one("#stats-tree", Tree)
-        tree.show_root = False
-        tree.guide_depth = 3
-
-        log_table = self.query_one("#log-table", DataTable)
-        log_table.add_column("Event", key="event")
-
-        self.refresh_overview()
-
-    def action_refresh_overview(self) -> None:
-        self.refresh_overview()
-
-    def refresh_overview(self) -> None:
-        self._populate_stats_tree()
-        self._populate_log()
-
-    def _populate_stats_tree(self) -> None:
-        tree = self.query_one("#stats-tree", Tree)
-        tree.clear()
-        root = tree.root
-
-        try:
-            stats = lp.get_summary_stats()
-        except Exception as e:
-            root.add_leaf(f"[error loading package stats: {e}]")
-            return
-
-        packages_node = root.add(f"total packages: {stats.total}", expand=True)
-        packages_node.add_leaf(f"official: {stats.official}")
-        packages_node.add_leaf(f"foreign: {stats.foreign}")
-
-        root.add_leaf(f"total size: {preview_item.bytes_to_human(stats.total_size_bytes)}")
-
-    def _populate_log(self) -> None:
-        table = self.query_one("#log-table", DataTable)
-        table.clear()
-
-        try:
-            events = pacman_log.read_log()
-        except OSError as e:
-            table.add_row(Text(f"[could not read pacman.log: {e}]", style="error"))
-            return
-
-        # Most recent first. Sorted explicitly by timestamp (via
-        # log_event_sort_key) rather than just reversing file order or
-        # comparing timestamps as plain strings — see that function's
-        # docstring for why naive string comparison isn't safe here.
-        for event in sorted(events, key=log_event_sort_key, reverse=True):
-            table.add_row(_format_log_event(event))
-
-
-# ---------------------------------------------------------------------------
-# App: owns both screens, switches between them without destroying state
+# App: owns the single search/preview screen
 # ---------------------------------------------------------------------------
 class PacTUIApp(App):
-    """Top-level app. Installs both screens up front (install_screen keeps
-    them alive off-stack, so switching back to a screen restores exactly
-    where you left it — scroll position, filter state, cursor row, etc. —
-    with no manual save/restore code needed).
+    """Top-level app. Single-purpose: search, filter, and preview installed
+    packages. No package-stats overview, no pacman.log viewer — other
+    tools already do that well.
     """
 
+    TITLE = "pactui"
+
     BINDINGS = [
-        ("f1", "goto_overview", "Overview"),
-        ("f2", "goto_search", "Search"),
         ("q", "quit", "Quit"),
     ]
 
@@ -819,22 +574,15 @@ class PacTUIApp(App):
         self.register_theme(ONE_DARK)
         self.theme = "one-dark"
 
-        # Build the cache before any screen mounts. Without this,
+        # Build the cache before the screen mounts. Without this,
         # PackageSearchScreen's FilterPanel (which queries the schema in
         # its own on_mount) can race a first-run machine that has no cache
         # DB yet, surfacing as an unhandled sqlite "unable to open database
-        # file" the moment the Search screen is installed.
+        # file" the moment the screen is installed.
         lp.ensure_cache_db()
 
-        self.install_screen(OverviewScreen(), name="overview")
         self.install_screen(PackageSearchScreen(), name="search")
-        self.push_screen("overview")
-
-    def action_goto_overview(self) -> None:
-        self.switch_screen("overview")
-
-    def action_goto_search(self) -> None:
-        self.switch_screen("search")
+        self.push_screen("search")
 
 
 if __name__ == "__main__":
