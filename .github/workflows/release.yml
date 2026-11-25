@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "New version without a leading v, e.g. 1.2.1"
+        required: true
+      notes:
+        description: "Release notes (optional)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # Inputs go through env vars, never interpolated into the scripts,
+      # so a stray quote in the notes can't break or inject into a step.
+      VERSION: ${{ inputs.version }}
+      NOTES: ${{ inputs.notes }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate version
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "Bad version: $VERSION"; exit 1; }
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "Tag v$VERSION already exists"; exit 1
+          fi
+
+      - name: Run tests
+        run: |
+          pip install pytest
+          python -m pytest tests/ -q
+
+      - name: Commit 1, bump version and tag
+        run: |
+          git config user.name "MarcoLux06"
+          git config user.email "89221170+MarcoLux06@users.noreply.github.com"
+          sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          sed -i "s/^sha256sums=.*/sha256sums=('SKIP')/" PKGBUILD
+          sed -i "s/^__version__ = .*/__version__ = \"$VERSION\"/" src/lib/config.py
+          git add PKGBUILD src/lib/config.py
+          git commit -m "Bump version to $VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD:refs/heads/main "v$VERSION"
+
+      - name: Build tarball and create release
+        run: |
+          git archive --format=tar.gz --prefix=pacfz/ -o "pacfz-$VERSION.tar.gz" "v$VERSION"
+          sha256sum "pacfz-$VERSION.tar.gz" | cut -d' ' -f1 > checksum.txt
+          printf '%s\n' "${NOTES:-Release $VERSION.}" > notes.md
+          gh release create "v$VERSION" "pacfz-$VERSION.tar.gz" \
+            --title "v$VERSION" --notes-file notes.md --verify-tag
+
+      - name: Commit 2, point PKGBUILD at the asset
+        run: |
+          SUM=$(cat checksum.txt)
+          URL="https://github.com/MarcoLux06/pacfz/releases/download/v$VERSION/pacfz-$VERSION.tar.gz"
+          sed -i "s|^source=.*|source=(\"pacfz-$VERSION.tar.gz::$URL\")|" PKGBUILD
+          sed -i "s/^sha256sums=.*/sha256sums=('$SUM')/" PKGBUILD
+          git add PKGBUILD
+          git commit -m "Point v$VERSION at its release asset"
+          git push origin HEAD:refs/heads/main
